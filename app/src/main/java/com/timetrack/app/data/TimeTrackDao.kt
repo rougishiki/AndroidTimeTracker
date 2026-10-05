@@ -83,4 +83,43 @@ interface TimeTrackDao {
 
     @Query("SELECT COUNT(*) FROM sessions")
     suspend fun sessionCount(): Int
+
+    // ---------- correcting intervals ----------
+
+    @Query("SELECT * FROM sessions WHERE id = :id LIMIT 1")
+    suspend fun getSession(id: Long): Session?
+
+    @Update
+    suspend fun updateSession(session: Session)
+
+    @Query("DELETE FROM sessions WHERE id = :id")
+    suspend fun deleteSession(id: Long)
+
+    /**
+     * The individual intervals of one task inside a window, for the editor.
+     *
+     * The statistics screen only ever shows an aggregate; to fix a mistake the
+     * user has to reach the actual rows, which is what this returns. The overlap
+     * predicate matches [getSessionsOverlapping] so the editor and the report
+     * agree on which intervals a day contains.
+     */
+    @Query(
+        """
+        SELECT s.id AS id, s.taskId AS taskId, s.startTime AS startTime, s.endTime AS endTime,
+               t.name AS taskName, t.colorArgb AS taskColorArgb
+        FROM sessions s JOIN tasks t ON t.id = s.taskId
+        WHERE s.taskId = :taskId AND s.startTime < :until AND (s.endTime IS NULL OR s.endTime > :since)
+        ORDER BY s.startTime ASC
+        """
+    )
+    suspend fun getTaskSessionsOverlapping(taskId: Long, since: Long, until: Long): List<SessionWithTask>
+
+    // ---------- managing tasks ----------
+
+    /** Includes archived tasks, so an archived one can be restored. */
+    @Query("SELECT * FROM tasks ORDER BY archived ASC, lastUsedAt DESC")
+    fun observeAllTasks(): Flow<List<Task>>
+
+    @Query("UPDATE sessions SET taskId = :toTaskId WHERE taskId = :fromTaskId")
+    suspend fun reassignSessions(fromTaskId: Long, toTaskId: Long): Int
 }

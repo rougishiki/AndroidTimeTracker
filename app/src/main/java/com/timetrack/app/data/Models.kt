@@ -33,6 +33,13 @@ enum class ExportRange(val label: String) {
 }
 
 /**
+ * What a rename actually did, so the UI can say "已合并" instead of claiming a
+ * plain rename. `tasks.name` is unique, so renaming onto a taken name has to
+ * merge the two tasks rather than fail.
+ */
+enum class RenameOutcome { RENAMED, MERGED }
+
+/**
  * One day of the todo screen: the items created for that day, plus the week's
  * items that were still open when it began.
  *
