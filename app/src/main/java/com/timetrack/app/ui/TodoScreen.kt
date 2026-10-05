@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -69,6 +68,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.timetrack.app.data.Todo
 import com.timetrack.app.data.TodoPeriod
 import com.timetrack.app.data.TodoScope
+import com.timetrack.app.ui.theme.Space
 import com.timetrack.app.util.Fmt
 import java.time.LocalDate
 import java.time.YearMonth
@@ -103,8 +103,8 @@ fun TodoScreen(vm: TodoViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(horizontal = Space.pageH, vertical = Space.pageV),
+        verticalArrangement = Arrangement.spacedBy(Space.xl),
     ) {
         ModeSwitch(mode = mode, onSelect = { vm.setMode(it) })
 
@@ -238,7 +238,10 @@ private fun LoadingText() {
 @Composable
 private fun ModeSwitch(mode: TodoScope, onSelect: (TodoScope) -> Unit) {
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        val options = listOf(TodoScope.DAY to "今天", TodoScope.WEEK to "本周")
+        // Named by granularity, matching the statistics screen. These used to read
+        // "今天"/"本周", which sounded like two different pages rather than the two
+        // windows the statistics screen already calls 日 and 周.
+        val options = listOf(TodoScope.DAY to "日", TodoScope.WEEK to "周")
         options.forEachIndexed { index, (scope, label) ->
             SegmentedButton(
                 selected = mode == scope,
@@ -329,45 +332,55 @@ private fun TodoSection(
     val open = items.filter { it.doneAt == null }
     val done = items.filter { it.doneAt != null }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+    // No card. A card around a list says "this is an object", and a list of things
+    // to do is not an object — it is the page. A section label, the spacing and a
+    // divider do the grouping instead, and the list stops looking like one more
+    // block among many.
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Space.xs),
+    ) {
+        Row(
+            modifier = Modifier.padding(bottom = Space.xs),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = if (open.isEmpty() && done.isNotEmpty()) "全部完成" else "还剩 ${open.size} 项",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(Space.sm))
+            Text(
+                text = if (open.isEmpty() && done.isNotEmpty()) "全部完成" else "还剩 ${open.size} 项",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
-            if (items.isEmpty()) {
-                Text(
-                    text = emptyHint,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        if (items.isEmpty()) {
+            Text(
+                text = emptyHint,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
-            open.forEach { todo ->
+        open.forEach { todo ->
+            TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
+        }
+
+        if (done.isNotEmpty()) {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = Space.sm),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+            Text(
+                text = "已完成 ${done.size} 项",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            done.forEach { todo ->
                 TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
-            }
-
-            if (done.isNotEmpty()) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                Text(
-                    text = "已完成 ${done.size} 项",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                done.forEach { todo ->
-                    TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
-                }
             }
         }
     }
@@ -390,58 +403,64 @@ private fun WeekSection(
 ) {
     var expanded by rememberSaveable { mutableStateOf(true) }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Space.xs),
+    ) {
+        Row(
+            modifier = Modifier.padding(bottom = Space.xs),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("本周", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = if (items.isEmpty()) "没有未完成的" else "还剩 ${items.size} 项",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
+            Text(
+                text = "本周",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(Space.sm))
+            Text(
+                text = if (items.isEmpty()) "没有未完成的" else "还剩 ${items.size} 项",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // The page has one add control now. A second bare "+" up here made
+            // the user guess which one added what, so this one is labelled.
+            TextButton(onClick = onAdd) { Text("添加到本周") }
+            IconButton(onClick = { expanded = !expanded }) {
+                Icon(
+                    imageVector = if (expanded) {
+                        Icons.Filled.KeyboardArrowUp
+                    } else {
+                        Icons.Filled.KeyboardArrowDown
+                    },
+                    contentDescription = if (expanded) "收起" else "展开",
                 )
-                IconButton(onClick = onAdd) {
-                    Icon(Icons.Filled.Add, contentDescription = "添加到本周")
-                }
-                IconButton(onClick = { expanded = !expanded }) {
-                    Icon(
-                        imageVector = if (expanded) {
-                            Icons.Filled.KeyboardArrowUp
-                        } else {
-                            Icons.Filled.KeyboardArrowDown
-                        },
-                        contentDescription = if (expanded) "收起" else "展开",
-                    )
-                }
             }
+        }
 
-            if (expanded) {
-                if (items.isEmpty() && doneThatDay.isEmpty()) {
-                    Text(
-                        text = "本周还没有待办。点右上角 + 添加一条，它会在这一周每天都出现。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                items.forEach { todo ->
+        if (expanded) {
+            if (items.isEmpty() && doneThatDay.isEmpty()) {
+                Text(
+                    text = "本周还没有待办。添加一条，它会在这一周每天都出现。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            items.forEach { todo ->
+                TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
+            }
+            if (doneThatDay.isNotEmpty()) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = Space.sm),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
+                Text(
+                    text = "当天完成的本周事项",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                doneThatDay.forEach { todo ->
                     TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
-                }
-                if (doneThatDay.isNotEmpty()) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                    Text(
-                        text = "当天完成的本周事项",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    doneThatDay.forEach { todo ->
-                        TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
-                    }
                 }
             }
         }

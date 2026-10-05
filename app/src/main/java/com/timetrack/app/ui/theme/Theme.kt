@@ -1,78 +1,91 @@
 package com.timetrack.app.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
 
+/**
+ * Maps the neutral palette onto Material's roles.
+ *
+ * The `surfaceContainer*` roles are set explicitly because Material3 components
+ * (notably `Card`) default to them rather than to `surface`; leaving them alone
+ * would let a tinted container back in through the side door.
+ */
 private val LightScheme = lightColorScheme(
-    primary = LightPrimary,
-    onPrimary = LightOnPrimary,
-    primaryContainer = LightPrimaryContainer,
-    onPrimaryContainer = LightOnPrimaryContainer,
-    secondary = LightSecondary,
-    background = LightBackground,
-    onBackground = LightOnBackground,
+    primary = LightInk,
+    onPrimary = LightSurface,
+    primaryContainer = LightFill,
+    onPrimaryContainer = LightInk,
+    secondary = LightInkSecondary,
+    onSecondary = LightSurface,
+    background = LightBg,
+    onBackground = LightInk,
     surface = LightSurface,
-    onSurface = LightOnSurface,
-    surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = LightOnSurfaceVariant,
-    outline = LightOutline,
-    error = LightError,
+    onSurface = LightInk,
+    surfaceVariant = LightFill,
+    onSurfaceVariant = LightInkSecondary,
+    surfaceContainerLowest = LightSurface,
+    surfaceContainerLow = LightSurface,
+    surfaceContainer = LightFill,
+    surfaceContainerHigh = LightFill,
+    surfaceContainerHighest = LightFill,
+    outline = LightOutlineStrong,
+    outlineVariant = LightOutline,
+    error = LightDestructive,
+    onError = LightSurface,
+    errorContainer = LightErrorContainer,
+    onErrorContainer = LightOnErrorContainer,
 )
 
 private val DarkScheme = darkColorScheme(
-    primary = DarkPrimary,
-    onPrimary = DarkOnPrimary,
-    primaryContainer = DarkPrimaryContainer,
-    onPrimaryContainer = DarkOnPrimaryContainer,
-    secondary = DarkSecondary,
-    background = DarkBackground,
-    onBackground = DarkOnBackground,
+    primary = DarkInk,
+    onPrimary = DarkBg,
+    primaryContainer = DarkFill,
+    onPrimaryContainer = DarkInk,
+    secondary = DarkInkSecondary,
+    onSecondary = DarkBg,
+    background = DarkBg,
+    onBackground = DarkInk,
     surface = DarkSurface,
-    onSurface = DarkOnSurface,
-    surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = DarkOnSurfaceVariant,
-    outline = DarkOutline,
-    error = DarkError,
+    onSurface = DarkInk,
+    surfaceVariant = DarkFill,
+    onSurfaceVariant = DarkInkSecondary,
+    surfaceContainerLowest = DarkBg,
+    surfaceContainerLow = DarkSurface,
+    surfaceContainer = DarkFill,
+    surfaceContainerHigh = DarkFill,
+    surfaceContainerHighest = DarkFill,
+    outline = DarkOutlineStrong,
+    outlineVariant = DarkOutline,
+    error = DarkDestructive,
+    onError = DarkBg,
+    errorContainer = DarkErrorContainer,
+    onErrorContainer = DarkOnErrorContainer,
 )
 
 /**
- * The app's chrome colour.
+ * The app's chrome colour: neutral, in both modes, always.
  *
- * Follows the wallpaper on Android 12+ ("Material You") and falls back to the
- * fixed scheme above everywhere else.
+ * Material You was enabled for one release and is off again on purpose. It
+ * generates a tinted palette from the wallpaper, and a tinted palette is exactly
+ * what this design removed — it competes with the task colours, which are the
+ * only colours here that mean anything. Turning it back on is one line, and the
+ * trade is a personalised chrome against a calm one.
  *
- * This has nothing to do with the colour a *task* is drawn in. Those come from
- * `TimeTrackRepository.colorFor`, a fixed palette derived from the task name,
- * and they have to stay stable because the same colour appears in the charts, in
- * the notification and in the exported JSON. An earlier comment here claimed
- * dynamic colour had to stay off for that reason; it was simply wrong — the two
- * palettes never meet, and the task palette is not a theme concern at all.
+ * This has nothing to do with the colour a *task* is drawn in: those come from
+ * `TimeTrackRepository.colorFor`, a fixed palette that also appears in the
+ * charts, the notification and the exported JSON, and they never change.
  */
 @Composable
 fun TimeTrackTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkScheme
-        else -> LightScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) DarkScheme else LightScheme,
+        typography = TimeTrackTypography,
         content = content,
     )
 }

@@ -22,7 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +44,7 @@ import com.timetrack.app.data.DayStat
 import com.timetrack.app.data.PeriodComparison
 import com.timetrack.app.data.StatsMode
 import com.timetrack.app.data.TaskSlice
+import com.timetrack.app.ui.theme.Space
 import com.timetrack.app.util.Fmt
 import java.time.LocalDate
 
@@ -58,34 +58,43 @@ fun StatsScreen(vm: AppViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = Space.pageH, vertical = Space.pageV),
+        verticalArrangement = Arrangement.spacedBy(Space.xl),
     ) {
-        ModeSwitch(mode = mode, onSelect = { vm.setStatsMode(it) })
+        Column(verticalArrangement = Arrangement.spacedBy(Space.md)) {
+            ModeSwitch(mode = mode, onSelect = { vm.setStatsMode(it) })
 
-        DateNavigator(
-            label = vm.periodLabel(),
-            canGoNext = !vm.isAtCurrentPeriod(),
-            onPrev = { vm.shiftPeriod(-1) },
-            onNext = { vm.shiftPeriod(1) },
-            onToday = { vm.goToToday() },
-        )
+            DateNavigator(
+                label = vm.periodLabel(),
+                canGoNext = !vm.isAtCurrentPeriod(),
+                onPrev = { vm.shiftPeriod(-1) },
+                onNext = { vm.shiftPeriod(1) },
+                onToday = { vm.goToToday() },
+            )
+        }
 
         if (mode == StatsMode.DAY) {
             val current = stat
             when {
                 current == null -> LoadingText()
 
-                current.slices.isEmpty() -> EmptyDayCard()
+                current.slices.isEmpty() -> EmptyState(
+                    icon = Icons.Filled.DateRange,
+                    title = "这一天没有记录",
+                    hint = "去「计时」页开始一段，统计会自动出现在这里。",
+                )
 
                 else -> {
-                    TotalCard(current)
-                    PieCard(current)
-                    BarCard(current, onSliceClick = { vm.openTaskSessions(it) })
-                    Text(
-                        text = "点某一项可以查看并修改它这一天的时间段。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    PeriodTotalBlock(
+                        label = "当日总计",
+                        totalMillis = current.totalMillis,
+                        secondary = "${current.slices.size} 项任务" +
+                            averageSuffix(current.totalMillis, current.intervalCount),
+                    )
+                    BarSection(
+                        slices = current.slices,
+                        total = current.totalMillis,
+                        onSliceClick = { vm.openTaskSessions(it) },
                     )
                 }
             }
@@ -95,11 +104,15 @@ fun StatsScreen(vm: AppViewModel) {
                 current == null -> LoadingText()
 
                 current.currentTotalMillis == 0L && current.previousTotalMillis == 0L ->
-                    EmptyRangeCard(mode)
+                    EmptyState(
+                        icon = Icons.Filled.DateRange,
+                        title = if (mode == StatsMode.WEEK) "这一周没有记录" else "这个月没有记录",
+                        hint = "左右翻到别的期看看，或者去「计时」页开始一段。",
+                    )
 
                 else -> {
-                    ComparisonTotalCard(current, mode)
-                    ComparisonCard(current)
+                    ComparisonTotalBlock(current, mode)
+                    ComparisonSection(current)
                 }
             }
         }
@@ -172,91 +185,60 @@ private fun DateNavigator(
     }
 }
 
+/**
+ * The period's headline figure, with no container around it.
+ *
+ * It used to sit in a card, which gave the one number that matters the same
+ * visual weight as everything else on the page. Removing the container is what
+ * promotes it: the 34sp total against two 12.5sp lines underneath is the whole
+ * hierarchy, and it costs no background at all.
+ */
 @Composable
-private fun TotalCard(stat: DayStat) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "当日总计",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = Fmt.duration(stat.totalMillis),
-                    style = MaterialTheme.typography.headlineMedium,
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "${stat.slices.size} 项任务",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+private fun PeriodTotalBlock(label: String, totalMillis: Long, secondary: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(Space.xs))
+        Text(
+            text = Fmt.duration(totalMillis),
+            style = MaterialTheme.typography.headlineMedium,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(Space.xs))
+        Text(
+            text = secondary,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
-@Composable
-private fun PieCard(stat: DayStat) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-        ) {
-            Text("时长占比", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(16.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                DonutChart(
-                    slices = stat.slices,
-                    modifier = Modifier.size(190.dp),
-                )
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = Fmt.duration(stat.totalMillis),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(
-                        text = "总计",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
+/** ` · 平均每次 40分`, or nothing when there is no interval to average. */
+private fun averageSuffix(totalMillis: Long, intervalCount: Int): String {
+    if (intervalCount <= 0) return ""
+    return " · 平均每次 ${Fmt.duration(totalMillis / intervalCount)}"
 }
 
 @Composable
-private fun BarCard(stat: DayStat, onSliceClick: (TaskSlice) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text("各项时长", style = MaterialTheme.typography.titleMedium)
-            stat.slices.forEach { slice ->
-                BarRow(
-                    slice = slice,
-                    total = stat.totalMillis,
-                    onClick = { onSliceClick(slice) },
-                )
-            }
+private fun BarSection(
+    slices: List<TaskSlice>,
+    total: Long,
+    onSliceClick: (TaskSlice) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Space.md),
+    ) {
+        Text(
+            text = "各项时长",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        slices.forEach { slice ->
+            BarRow(slice = slice, total = total, onClick = { onSliceClick(slice) })
         }
     }
 }
@@ -321,80 +303,64 @@ private fun BarRow(slice: TaskSlice, total: Long, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun EmptyDayCard() {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        EmptyState(
-            icon = Icons.Filled.DateRange,
-            title = "这一天没有记录",
-            hint = "去「计时」页开始一段，统计会自动出现在这里。",
-        )
-    }
-}
-
 private fun percent(part: Long, total: Long): String =
     if (total <= 0L) "0%" else String.format(java.util.Locale.US, "%.0f%%", part * 100.0 / total)
 
 // --- the week / month comparison view ----------------------------------------
 
 @Composable
-private fun ComparisonTotalCard(comparison: PeriodComparison, mode: StatsMode) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-        ) {
+private fun ComparisonTotalBlock(comparison: PeriodComparison, mode: StatsMode) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = if (mode == StatsMode.WEEK) "本周总计" else "本月总计",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(Space.xs))
+        Text(
+            text = Fmt.duration(comparison.currentTotalMillis),
+            style = MaterialTheme.typography.headlineMedium,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(Space.xs))
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = if (mode == StatsMode.WEEK) "本周总计" else "本月总计",
-                style = MaterialTheme.typography.labelMedium,
+                text = "上一期 ${Fmt.duration(comparison.previousTotalMillis)}",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = Fmt.duration(comparison.currentTotalMillis),
-                style = MaterialTheme.typography.headlineMedium,
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "上一期 ${Fmt.duration(comparison.previousTotalMillis)}",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                DeltaLabel(comparison.deltaMillis)
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "${Fmt.monthDay(comparison.currentStart)} – ${Fmt.monthDay(comparison.currentEndInclusive)}" +
-                    " · 对比 ${Fmt.monthDay(comparison.previousStart)} – ${Fmt.monthDay(comparison.previousEndInclusive)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            DeltaLabel(comparison.deltaMillis)
         }
+        Spacer(Modifier.height(Space.xs))
+        Text(
+            text = "${Fmt.monthDay(comparison.currentStart)} – ${Fmt.monthDay(comparison.currentEndInclusive)}" +
+                " · 对比 ${Fmt.monthDay(comparison.previousStart)} – ${Fmt.monthDay(comparison.previousEndInclusive)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
 @Composable
-private fun ComparisonCard(comparison: PeriodComparison) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text("与上一期对比", style = MaterialTheme.typography.titleMedium)
-            if (comparison.rows.isEmpty()) {
-                Text(
-                    text = "两期都没有记录。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            comparison.rows.forEach { row -> ComparisonRowItem(row) }
+private fun ComparisonSection(comparison: PeriodComparison) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Space.md),
+    ) {
+        Text(
+            text = "与上一期对比",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (comparison.rows.isEmpty()) {
+            Text(
+                text = "两期都没有记录。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
+        comparison.rows.forEach { row -> ComparisonRowItem(row) }
     }
 }
 
@@ -451,15 +417,4 @@ private fun DeltaLabel(deltaMillis: Long) {
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurface,
     )
-}
-
-@Composable
-private fun EmptyRangeCard(mode: StatsMode) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        EmptyState(
-            icon = Icons.Filled.DateRange,
-            title = if (mode == StatsMode.WEEK) "这一周没有记录" else "这个月没有记录",
-            hint = "左右翻到别的期看看，或者去「计时」页开始一段。",
-        )
-    }
 }

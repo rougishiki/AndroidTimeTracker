@@ -1,15 +1,28 @@
 package com.timetrack.app.ui
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,9 +31,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.timetrack.app.R
@@ -112,21 +130,7 @@ fun AppRoot() {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            NavigationBar {
-                Tab.entries.forEach { item ->
-                    NavigationBarItem(
-                        selected = tab == item,
-                        onClick = { tab = item },
-                        icon = {
-                            Icon(
-                                painter = painterResource(item.iconRes),
-                                contentDescription = item.label,
-                            )
-                        },
-                        label = { Text(item.label) },
-                    )
-                }
-            }
+            BottomBar(current = tab, onSelect = { tab = it })
         },
     ) { innerPadding ->
         Box(
@@ -158,5 +162,74 @@ fun AppRoot() {
             onAdd = { day, start, end -> vm.addSessionToCurrentTask(day, start, end) },
             onDismiss = { vm.closeTaskSessions() },
         )
+    }
+}
+
+/**
+ * The bottom bar, hand-built for one reason: Material's `NavigationBar` draws a
+ * filled pill behind the selected item, and with four tabs that pill is one of
+ * the largest patches of colour on the screen. A 3dp line above the icon says
+ * the same thing at a fraction of the visual weight — and in an interface whose
+ * only real colours are the user's task colours, that matters.
+ *
+ * `selectable` rather than `clickable` so the items still introduce themselves
+ * to a screen reader as tabs with a selected state.
+ */
+@Composable
+private fun BottomBar(current: Tab, onSelect: (Tab) -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Column {
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
+            ) {
+                Tab.entries.forEach { tab ->
+                    val selected = tab == current
+                    val tint = if (selected) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .selectable(
+                                selected = selected,
+                                onClick = { onSelect(tab) },
+                                role = Role.Tab,
+                            ),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(20.dp)
+                                .height(3.dp)
+                                .clip(CircleShape)
+                                .background(if (selected) tint else Color.Transparent),
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Icon(
+                            painter = painterResource(tab.iconRes),
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                            tint = tint,
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            text = tab.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = tint,
+                        )
+                    }
+                }
+            }
+        }
     }
 }

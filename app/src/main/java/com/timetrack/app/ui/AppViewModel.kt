@@ -122,6 +122,18 @@ class AppViewModel(
             .mapLatest { (date, mode) -> repo.periodComparison(mode, date) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /**
+     * Today's totals, recomputed on every clock tick.
+     *
+     * Kept separate from [dayStat], which follows whichever day the statistics
+     * screen has been paged to. The timer screen always wants today, so it can
+     * show what each task has already cost.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val todayStat: StateFlow<DayStat?> = _now
+        .mapLatest { repo.dayStat(repo.today()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
