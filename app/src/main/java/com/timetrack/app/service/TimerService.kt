@@ -72,6 +72,9 @@ class TimerService : Service() {
             .setContentTitle(taskName.ifBlank { "正在计时" })
             .setContentText("点击回到应用")
             .setContentIntent(openAppIntent())
+            // Stopping used to take three steps: open the shade, tap through to
+            // the app, then press stop. The action collapses that to one.
+            .addAction(R.drawable.ic_action_stop, "停止计时", stopTimerIntent())
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(true)
@@ -82,6 +85,18 @@ class TimerService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
+
+    private fun stopTimerIntent(): PendingIntent {
+        val intent = Intent(this, StopTimerReceiver::class.java).apply {
+            action = StopTimerReceiver.ACTION_STOP
+        }
+        return PendingIntent.getBroadcast(
+            this,
+            STOP_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+    }
 
     private fun openAppIntent(): PendingIntent {
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -114,6 +129,7 @@ class TimerService : Service() {
     companion object {
         private const val CHANNEL_ID = "time_tracking"
         private const val NOTIFICATION_ID = 1001
+        private const val STOP_REQUEST_CODE = 1002
         private const val ACTION_SHOW = "com.timetrack.app.action.SHOW"
         private const val EXTRA_TASK_NAME = "extra_task_name"
         private const val EXTRA_START_TIME = "extra_start_time"

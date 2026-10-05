@@ -1,5 +1,7 @@
 package com.timetrack.app.data
 
+import java.time.LocalDate
+
 /** One task's share of a reporting window. */
 data class TaskSlice(
     val taskId: Long,
@@ -59,3 +61,49 @@ data class DayTodos(
     /** Weekly items finished during that day. */
     val weekDoneThatDay: List<Todo>,
 )
+
+/** How wide a window the statistics screen is looking at. */
+enum class StatsMode(val label: String) {
+    DAY("日"),
+    WEEK("周"),
+    MONTH("月"),
+}
+
+/** Aggregated totals over an arbitrary half-open window `[start, untilExclusive)`. */
+data class RangeStat(
+    val start: LocalDate,
+    val endInclusive: LocalDate,
+    val totalMillis: Long,
+    val slices: List<TaskSlice>,
+)
+
+/**
+ * One task's time in a period next to the period immediately before it.
+ *
+ * A task present in only one of the two still gets a row, with zero on the other
+ * side: "I did not touch this at all last week" is exactly the kind of change the
+ * comparison exists to show, and dropping it would hide the most interesting
+ * rows.
+ */
+data class ComparisonRow(
+    val taskId: Long,
+    val name: String,
+    val colorArgb: Int,
+    val currentMillis: Long,
+    val previousMillis: Long,
+) {
+    val deltaMillis: Long get() = currentMillis - previousMillis
+}
+
+/** A period's totals beside the same figures for the period before it. */
+data class PeriodComparison(
+    val currentStart: LocalDate,
+    val currentEndInclusive: LocalDate,
+    val previousStart: LocalDate,
+    val previousEndInclusive: LocalDate,
+    val currentTotalMillis: Long,
+    val previousTotalMillis: Long,
+    val rows: List<ComparisonRow>,
+) {
+    val deltaMillis: Long get() = currentTotalMillis - previousTotalMillis
+}

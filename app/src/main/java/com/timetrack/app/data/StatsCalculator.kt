@@ -42,4 +42,43 @@ object StatsCalculator {
         }
         return buckets.values.sortedByDescending { it.millis }
     }
+
+    /**
+     * Lays two periods' per-task totals side by side.
+     *
+     * A task appearing in only one of the periods still gets a row, with zero on
+     * the other side. Dropping it would hide precisely what the comparison is
+     * for: something that appeared, or something that stopped happening.
+     *
+     * Sorted by the current period descending, with the previous period as the
+     * tie-break. The tie-break is what keeps a task that fell to zero near the
+     * top instead of sinking to the bottom next to the trivial rows.
+     */
+    fun compare(
+        current: List<TaskSlice>,
+        previous: List<TaskSlice>,
+    ): List<ComparisonRow> {
+        val currentById = current.associateBy { it.taskId }
+        val previousById = previous.associateBy { it.taskId }
+        val ids = LinkedHashSet<Long>().apply {
+            addAll(currentById.keys)
+            addAll(previousById.keys)
+        }
+
+        return ids.mapNotNull { id ->
+            val now = currentById[id]
+            val before = previousById[id]
+            val source = now ?: before ?: return@mapNotNull null
+            ComparisonRow(
+                taskId = id,
+                name = source.name,
+                colorArgb = source.colorArgb,
+                currentMillis = now?.millis ?: 0L,
+                previousMillis = before?.millis ?: 0L,
+            )
+        }.sortedWith(
+            compareByDescending<ComparisonRow> { it.currentMillis }
+                .thenByDescending { it.previousMillis },
+        )
+    }
 }

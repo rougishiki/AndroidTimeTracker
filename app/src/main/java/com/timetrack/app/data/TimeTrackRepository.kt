@@ -49,15 +49,22 @@ class TimeTrackRepository(
         }
     }
 
-    /** Switches to an existing task, closing the running one first. */
-    suspend fun startExistingTask(taskId: Long) {
-        db.withTransaction {
-            val task = dao.getTask(taskId) ?: return@withTransaction
-            val stamp = clock()
-            dao.closeRunningSessions(stamp)
-            dao.updateTask(task.copy(lastUsedAt = stamp, archived = false))
-            dao.insertSession(Session(taskId = taskId, startTime = stamp))
-        }
+    /**
+     * Switches to an existing task, closing the running one first.
+     *
+     * Reports whether anything started, because the launcher shortcuts call this
+     * with an id from a menu that may be out of date. Claiming "started" when
+     * nothing did would be a lie the user cannot see through.
+     */
+    suspend fun startExistingTask(taskId: Long): Boolean = db.withTransaction {
+        val task = dao.getTask(taskId) ?: return@withTransaction false
+        val stamp = clock()
+        dao.closeRunningSessions(stamp)
+        // An archived task can be started again from a shortcut; doing so brings
+        // it back into the picker rather than tracking something invisible.
+        dao.updateTask(task.copy(lastUsedAt = stamp, archived = false))
+        dao.insertSession(Session(taskId = taskId, startTime = stamp))
+        true
     }
 
     /** Stops tracking and returns the finished duration in millis, or null if nothing ran. */
@@ -70,21 +77,60 @@ class TimeTrackRepository(
     }
 
     /**
+     * Totals for the half-open window `[since, untilExclusive)`.
+     *
+     * The same aggregation the day view uses, only widened: the overlap query
+     * already takes arbitrary bounds, so a week or a month needs no new SQL and
+     * inherits the midnight-splitting rule for free. An interval spanning New
+     * Year is therefore split between the two weeks, not attributed to one.
+     */
+    suspend fun rangeStat(since: LocalDate, untilExclusive: LocalDate): RangeStat {
+        val windowStart = startOfDay(since)
+        val windowEnd = startOfDay(untilExclusive)
+        val slices = StatsCalculator.aggregate(
+            sessions = dao.getSessionsOverlapping(windowStart, windowEnd),
+            windowStart = windowStart,
+            windowEnd = windowEnd,
+            now = clock(),
+        )
+        return RangeStat(
+            start = since,
+            endInclusive = untilExclusive.minusDays(1),
+            totalMillis = slices.sumOf { it.millis },
+            slices = slices,
+        )
+    }
+
+    /** A period's totals beside the figures for the period immediately before it. */
+    suspend fun periodComparison(mode: StatsMode, day: LocalDate): PeriodComparison {
+        val (currentStart, currentUntil) = StatsPeriod.bounds(mode, day)
+        val (previousStart, previousUntil) = StatsPeriod.previousBounds(mode, day)
+        val current = rangeStat(currentStart, currentUntil)
+        val previous = rangeStat(previousStart, previousUntil)
+        return PeriodComparison(
+            currentStart = currentStart,
+            currentEndInclusive = StatsPeriod.lastDayInclusive(currentUntil),
+            previousStart = previousStart,
+            previousEndInclusive = StatsPeriod.lastDayInclusive(previousUntil),
+            currentTotalMillis = current.totalMillis,
+            previousTotalMillis = previous.totalMillis,
+            rows = StatsCalculator.compare(current.slices, previous.slices),
+        )
+    }
+
+    /**
      * Totals for one local day.
      *
      * An interval that crosses midnight contributes only its overlapping part,
      * so `23:30 -> 00:30` adds 30 minutes to each of the two days.
      */
     suspend fun dayStat(date: LocalDate): DayStat {
-        val dayStart = startOfDay(date)
-        val dayEnd = startOfDay(date.plusDays(1))
-        val slices = StatsCalculator.aggregate(
-            sessions = dao.getSessionsOverlapping(dayStart, dayEnd),
-            windowStart = dayStart,
-            windowEnd = dayEnd,
-            now = clock(),
+        val stat = rangeStat(date, date.plusDays(1))
+        return DayStat(
+            dayStart = startOfDay(date),
+            totalMillis = stat.totalMillis,
+            slices = stat.slices,
         )
-        return DayStat(dayStart = dayStart, totalMillis = slices.sumOf { it.millis }, slices = slices)
     }
 
     suspend fun exportRows(range: ExportRange): List<ExportRow> {

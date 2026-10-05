@@ -77,6 +77,18 @@ object SessionTimes {
     fun crossesMidnight(startTime: Long, endTime: Long, zone: ZoneId): Boolean =
         dayOf(startTime, zone) != dayOf(endTime, zone)
 
+    /**
+     * Whether an interval has been open long enough that the user probably
+     * walked away without pressing stop.
+     *
+     * The threshold comes from the caller; the boundary lives here so it is unit
+     * tested rather than buried in a view model that needs a device to run. A
+     * clock that jumped backwards cannot make an interval look forgotten,
+     * because the difference would be negative.
+     */
+    fun isProbablyForgotten(startTime: Long, now: Long, thresholdMillis: Long): Boolean =
+        now - startTime >= thresholdMillis
+
     private fun instantOf(day: LocalDate, minutes: Int, zone: ZoneId): Long =
         day.atTime(hourOf(minutes), minuteOf(minutes))
             .atZone(zone)

@@ -160,4 +160,75 @@ class StatsCalculatorTest {
         )
         assertEquals(40 * minute, slices.sumOf { it.millis })
     }
+
+    // ---------- period comparison ----------
+
+    private fun slice(taskId: Long, name: String, millis: Long) = TaskSlice(
+        taskId = taskId,
+        name = name,
+        colorArgb = 0xFF112233.toInt(),
+        millis = millis,
+    )
+
+    @Test
+    fun `compare keeps a task that only appears in the current period`() {
+        val rows = StatsCalculator.compare(
+            current = listOf(slice(1, "新出现的", hour)),
+            previous = emptyList(),
+        )
+        assertEquals(1, rows.size)
+        assertEquals(hour, rows[0].currentMillis)
+        assertEquals(0L, rows[0].previousMillis)
+        assertEquals(hour, rows[0].deltaMillis)
+    }
+
+    @Test
+    fun `compare keeps a task that dropped out entirely`() {
+        val rows = StatsCalculator.compare(
+            current = emptyList(),
+            previous = listOf(slice(1, "上一期做过", hour)),
+        )
+        assertEquals(1, rows.size)
+        assertEquals(0L, rows[0].currentMillis)
+        assertEquals(hour, rows[0].previousMillis)
+        assertEquals(-hour, rows[0].deltaMillis)
+    }
+
+    @Test
+    fun `compare matches tasks across the two periods by id, not by name`() {
+        val rows = StatsCalculator.compare(
+            current = listOf(slice(7, "写周报", 2 * hour)),
+            previous = listOf(slice(7, "写周报", hour)),
+        )
+        assertEquals(1, rows.size)
+        assertEquals(2 * hour, rows[0].currentMillis)
+        assertEquals(hour, rows[0].previousMillis)
+        assertEquals(hour, rows[0].deltaMillis)
+    }
+
+    @Test
+    fun `compare sorts by the current period first`() {
+        val rows = StatsCalculator.compare(
+            current = listOf(slice(1, "A", 30 * minute), slice(2, "B", hour)),
+            previous = listOf(slice(1, "A", 5 * hour), slice(2, "B", minute)),
+        )
+        // B leads because it is bigger this period, even though A was bigger before.
+        assertEquals(listOf("B", "A"), rows.map { it.name })
+    }
+
+    @Test
+    fun `compare sorts a task that fell to zero by what it used to be worth`() {
+        val rows = StatsCalculator.compare(
+            current = listOf(slice(1, "还在", 10 * minute)),
+            previous = listOf(slice(2, "大的旧项", 5 * hour), slice(3, "小的旧项", minute)),
+        )
+        // Both of the vanished rows have a zero current value, so the previous
+        // period decides their order rather than leaving them at the bottom.
+        assertEquals(listOf("还在", "大的旧项", "小的旧项"), rows.map { it.name })
+    }
+
+    @Test
+    fun `compare of two empty periods is empty`() {
+        assertTrue(StatsCalculator.compare(emptyList(), emptyList()).isEmpty())
+    }
 }

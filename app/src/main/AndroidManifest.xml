@@ -37,6 +37,12 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="User-initiated activity tracking; keeps the running timer visible in the notification shade." />
         </service>
+
+        <!-- Target of the notification's "stop" action. Not exported: only the
+             PendingIntent this app creates can reach it. -->
+        <receiver
+            android:name=".service.StopTimerReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

@@ -162,4 +162,19 @@ class SessionTimesTest {
         }
         assertEquals(53 * 16, checked)
     }
+
+    // --- the "did you forget to stop?" boundary ------------------------------
+
+    @Test
+    fun `an interval counts as forgotten only once it passes the threshold`() {
+        val start = 1_700_000_000_000L
+        val eightHours = 8 * 60 * 60_000L
+
+        assertFalse(SessionTimes.isProbablyForgotten(start, start + eightHours - 1, eightHours))
+        assertTrue(SessionTimes.isProbablyForgotten(start, start + eightHours, eightHours))
+        assertTrue(SessionTimes.isProbablyForgotten(start, start + 14 * 60 * 60_000L, eightHours))
+        // A clock that jumped backwards must not make a fresh interval look
+        // forgotten; the difference is negative.
+        assertFalse(SessionTimes.isProbablyForgotten(start, start - 60_000L, eightHours))
+    }
 }

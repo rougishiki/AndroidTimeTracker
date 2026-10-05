@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.timetrack.app.StartRequest
 import com.timetrack.app.TimeTrackApp
 import com.timetrack.app.service.TimerService
 
@@ -52,6 +53,9 @@ fun AppRoot() {
     val snackbarHostState = remember { SnackbarHostState() }
 
     val running by vm.running.collectAsStateWithLifecycle()
+    val longRunning by vm.longRunning.collectAsStateWithLifecycle()
+    val taskSessions by vm.taskSessions.collectAsStateWithLifecycle()
+    val now by vm.now.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val todoMessage by todoVm.message.collectAsStateWithLifecycle()
 
@@ -78,6 +82,24 @@ fun AppRoot() {
         val text = todoMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(text)
         todoVm.consumeMessage()
+    }
+
+    // The "did you forget to stop?" reminder, read from observed state rather
+    // than driven by an alarm — see AppViewModel.longRunning for why. Keyed on
+    // the interval so it fires once per session rather than once per
+    // recomposition.
+    LaunchedEffect(longRunning?.id) {
+        val stuck = longRunning ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar("「${stuck.taskName}」已经计时很久了，确认还在进行吗？")
+    }
+
+    // A launcher shortcut asks for a task to start. Consumed once so a
+    // recomposition cannot start it a second time.
+    val pendingStart by StartRequest.taskId.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingStart) {
+        val taskId = pendingStart ?: return@LaunchedEffect
+        StartRequest.consume()
+        vm.startTaskById(taskId)
     }
 
     Scaffold(
@@ -107,5 +129,22 @@ fun AppRoot() {
                 Tab.EXPORT -> ExportScreen(vm)
             }
         }
+    }
+
+    // Hosted at the app level rather than on the statistics screen, because the
+    // reminder card on the timer screen opens this same editor — and because a
+    // dialog should not vanish when the user switches tabs.
+    taskSessions?.let { state ->
+        TaskSessionsDialog(
+            state = state,
+            nowMillis = now,
+            minutesOf = { vm.minutesOf(it) },
+            dayOf = { vm.dayOf(it) },
+            lengthOf = { d, s, e -> vm.lengthOf(d, s, e) },
+            onRetime = { id, day, start, end -> vm.retimeSession(id, day, start, end) },
+            onDelete = { id -> vm.deleteSession(id) },
+            onAdd = { day, start, end -> vm.addSessionToCurrentTask(day, start, end) },
+            onDismiss = { vm.closeTaskSessions() },
+        )
     }
 }

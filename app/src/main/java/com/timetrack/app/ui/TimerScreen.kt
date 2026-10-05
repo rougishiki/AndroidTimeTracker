@@ -28,6 +28,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,6 +60,7 @@ fun TimerScreen(vm: AppViewModel) {
     val now by vm.now.collectAsStateWithLifecycle()
     val recents by vm.recentTasks.collectAsStateWithLifecycle()
     val allTasks by vm.allTasks.collectAsStateWithLifecycle()
+    val longRunning by vm.longRunning.collectAsStateWithLifecycle()
 
     var input by rememberSaveable { mutableStateOf("") }
     var showManualEntry by rememberSaveable { mutableStateOf(false) }
@@ -80,6 +82,13 @@ fun TimerScreen(vm: AppViewModel) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         RunningCard(running = running, now = now, onStop = { vm.stop() })
+
+        LongRunningCard(
+            session = longRunning,
+            now = now,
+            onStop = { vm.stop() },
+            onFixEnd = { vm.openRunningSessions() },
+        )
 
         NewTaskCard(
             value = input,
@@ -213,6 +222,64 @@ private fun RunningCard(running: SessionWithTask?, now: Long, onStop: () -> Unit
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Shown once an interval has been open long enough to look forgotten.
+ *
+ * Deliberately a card rather than a popup: it is the answer to "did you walk
+ * away?", so it should sit there until the question is answered, not demand a
+ * tap on the way past. It offers both honest fixes — end it now, or end it
+ * earlier — because "I stopped an hour ago" is the usual truth.
+ */
+@Composable
+private fun LongRunningCard(
+    session: SessionWithTask?,
+    now: Long,
+    onStop: () -> Unit,
+    onFixEnd: () -> Unit,
+) {
+    if (session == null) return
+    val elapsed = (now - session.startTime).coerceAtLeast(0L)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "还在做这件事吗？",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+                text = "「${session.taskName}」已经连续计时 ${Fmt.duration(elapsed)}，" +
+                    "从 ${Fmt.dateTime(session.startTime)} 开始。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+                text = "如果早就结束了，可以结束到现在，或者改成更早的时间。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onStop, modifier = Modifier.weight(1f)) {
+                    Text("结束到现在")
+                }
+                OutlinedButton(onClick = onFixEnd, modifier = Modifier.weight(1f)) {
+                    Text("改成更早")
+                }
             }
         }
     }

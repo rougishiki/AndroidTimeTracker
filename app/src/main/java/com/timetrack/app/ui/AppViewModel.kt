@@ -7,8 +7,12 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.timetrack.app.data.DayStat
 import com.timetrack.app.data.ExportRange
+import com.timetrack.app.data.PeriodComparison
 import com.timetrack.app.data.RenameOutcome
+import com.timetrack.app.data.SessionTimes
 import com.timetrack.app.data.SessionWithTask
+import com.timetrack.app.data.StatsMode
+import com.timetrack.app.data.StatsPeriod
 import com.timetrack.app.data.Task
 import com.timetrack.app.data.TaskSlice
 import com.timetrack.app.data.TimeTrackRepository
@@ -26,6 +30,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 
 /** A rendered export body plus what it holds, so the toast can be specific. */
 data class ExportPayload(
@@ -68,11 +73,32 @@ class AppViewModel(
     val running: StateFlow<SessionWithTask?> = repo.observeRunningSession()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /**
+     * The running interval once it has been going long enough to look forgotten,
+     * else null.
+     *
+     * Read from observed state rather than driven by an alarm, on purpose. The
+     * whole notification design is "zero wakeups", and an exact alarm would need
+     * SCHEDULE_EXACT_ALARM on Android 12+ — a permission the user has to grant
+     * from system settings. The cost is honest and worth stating: this reminder
+     * is only seen when the app is opened. The persistent notification is the
+     * reminder that works the rest of the time.
+     */
+    val longRunning: StateFlow<SessionWithTask?> =
+        combine(running, _now) { current, now ->
+            current?.takeIf {
+                SessionTimes.isProbablyForgotten(it.startTime, now, FORGOTTEN_AFTER_MILLIS)
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val recentTasks: StateFlow<List<Task>> = repo.observeRecentTasks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _statsDate = MutableStateFlow(repo.today())
     val statsDate: StateFlow<LocalDate> = _statsDate.asStateFlow()
+
+    private val _statsMode = MutableStateFlow(StatsMode.DAY)
+    val statsMode: StateFlow<StatsMode> = _statsMode.asStateFlow()
 
     /**
      * Recomputed whenever the selected day changes *or* the clock ticks, so a task
@@ -82,6 +108,18 @@ class AppViewModel(
     val dayStat: StateFlow<DayStat?> =
         combine(_statsDate, _now) { date, _ -> date }
             .mapLatest { date -> repo.dayStat(date) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * The current period's totals beside the previous period's.
+     *
+     * Recomputed on the clock tick as well, for the same reason [dayStat] is: a
+     * task that is still running has to keep growing on whichever view is open.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val periodComparison: StateFlow<PeriodComparison?> =
+        combine(_statsDate, _statsMode, _now) { date, mode, _ -> date to mode }
+            .mapLatest { (date, mode) -> repo.periodComparison(mode, date) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _message = MutableStateFlow<String?>(null)
@@ -118,6 +156,22 @@ class AppViewModel(
         }
     }
 
+    /**
+     * Starts a task by id, for a launcher shortcut.
+     *
+     * The id comes from a menu the app built earlier, so it can be stale. The
+     * result is reported honestly rather than assumed.
+     */
+    fun startTaskById(taskId: Long) {
+        viewModelScope.launch {
+            runCatching { repo.startExistingTask(taskId) }
+                .onSuccess { started ->
+                    _message.value = if (started) "已开始计时" else "这个任务已经不存在了"
+                }
+                .onFailure { _message.value = "无法开始计时：${it.message ?: "未知错误"}" }
+        }
+    }
+
     fun stop() {
         viewModelScope.launch {
             runCatching { repo.stopRunning() }
@@ -132,16 +186,50 @@ class AppViewModel(
         }
     }
 
-    fun shiftDate(days: Long) {
-        val next = _statsDate.value.plusDays(days)
-        if (next <= repo.today()) _statsDate.value = next
+    fun setStatsMode(mode: StatsMode) {
+        _statsMode.value = mode
+    }
+
+    /**
+     * Steps one period of the current mode.
+     *
+     * Won't step past the period that contains today: the future holds no
+     * records, so a comparator with nothing in it would be noise. The whole
+     * current period counts as reachable, which is why this compares period
+     * starts rather than the raw date.
+     */
+    fun shiftPeriod(units: Long) {
+        val mode = _statsMode.value
+        val next = StatsPeriod.shift(mode, _statsDate.value, units)
+        val currentPeriodOfToday = StatsPeriod.bounds(mode, repo.today()).first
+        if (!StatsPeriod.bounds(mode, next).first.isAfter(currentPeriodOfToday)) {
+            _statsDate.value = next
+        }
+    }
+
+    fun isAtCurrentPeriod(): Boolean {
+        val mode = _statsMode.value
+        return StatsPeriod.bounds(mode, _statsDate.value).first ==
+            StatsPeriod.bounds(mode, repo.today()).first
+    }
+
+    /** `今天 · ...` / `第 41 周 · 10月5日 – 10月11日` / `2026年10月`. */
+    fun periodLabel(): String {
+        val day = _statsDate.value
+        return when (_statsMode.value) {
+            StatsMode.DAY -> Fmt.dayLabel(day, repo.today())
+            StatsMode.WEEK -> {
+                val monday = StatsPeriod.mondayOf(day)
+                "第 ${StatsPeriod.weekNumber(monday)} 周 · ${Fmt.weekRange(monday)}"
+            }
+
+            StatsMode.MONTH -> Fmt.monthTitle(YearMonth.from(day))
+        }
     }
 
     fun goToToday() {
         _statsDate.value = repo.today()
     }
-
-    fun isToday(): Boolean = _statsDate.value == repo.today()
 
     fun consumeMessage() {
         _message.value = null
@@ -194,15 +282,37 @@ class AppViewModel(
     val allTasks: StateFlow<List<Task>> = repo.observeAllTasks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Opens the editor for a task as it appears on the statistics screen's day. */
     fun openTaskSessions(slice: TaskSlice) {
-        val day = _statsDate.value
+        openTaskSessions(slice.taskId, slice.name, slice.colorArgb, _statsDate.value)
+    }
+
+    /**
+     * Opens the editor on whatever is running, anchored on the day that interval
+     * itself started.
+     *
+     * Used by the "did you forget to stop?" card, which is the one place the day
+     * being viewed on the statistics screen is irrelevant — a forgotten interval
+     * usually started yesterday.
+     */
+    fun openRunningSessions() {
+        val current = running.value ?: return
+        openTaskSessions(
+            taskId = current.taskId,
+            name = current.taskName,
+            colorArgb = current.taskColorArgb,
+            day = repo.localDayOf(current.startTime),
+        )
+    }
+
+    private fun openTaskSessions(taskId: Long, name: String, colorArgb: Int, day: LocalDate) {
         viewModelScope.launch {
             _taskSessions.value = TaskSessionsState(
-                taskId = slice.taskId,
-                taskName = slice.name,
-                colorArgb = slice.colorArgb,
+                taskId = taskId,
+                taskName = name,
+                colorArgb = colorArgb,
                 day = day,
-                sessions = repo.sessionsOfTaskOnDay(slice.taskId, day),
+                sessions = repo.sessionsOfTaskOnDay(taskId, day),
             )
         }
     }
@@ -308,6 +418,9 @@ class AppViewModel(
     fun today(): LocalDate = repo.today()
 
     companion object {
+        /** Eight hours: longer than any deliberate single sitting. */
+        const val FORGOTTEN_AFTER_MILLIS = 8 * 60 * 60 * 1000L
+
         fun factory(
             repo: TimeTrackRepository,
             todoRepo: TodoRepository,

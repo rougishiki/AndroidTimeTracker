@@ -25,6 +25,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,18 +39,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.timetrack.app.data.ComparisonRow
 import com.timetrack.app.data.DayStat
+import com.timetrack.app.data.PeriodComparison
+import com.timetrack.app.data.StatsMode
 import com.timetrack.app.data.TaskSlice
 import com.timetrack.app.util.Fmt
 import java.time.LocalDate
 
 @Composable
 fun StatsScreen(vm: AppViewModel) {
-    val date by vm.statsDate.collectAsStateWithLifecycle()
+    val mode by vm.statsMode.collectAsStateWithLifecycle()
     val stat by vm.dayStat.collectAsStateWithLifecycle()
-    val taskSessions by vm.taskSessions.collectAsStateWithLifecycle()
-    val now by vm.now.collectAsStateWithLifecycle()
-    val today = LocalDate.now()
+    val comparison by vm.periodComparison.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -56,51 +60,78 @@ fun StatsScreen(vm: AppViewModel) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        ModeSwitch(mode = mode, onSelect = { vm.setStatsMode(it) })
+
         DateNavigator(
-            label = Fmt.dayLabel(date, today),
-            canGoNext = date.isBefore(today),
-            onPrev = { vm.shiftDate(-1) },
-            onNext = { vm.shiftDate(1) },
+            label = vm.periodLabel(),
+            canGoNext = !vm.isAtCurrentPeriod(),
+            onPrev = { vm.shiftPeriod(-1) },
+            onNext = { vm.shiftPeriod(1) },
             onToday = { vm.goToToday() },
         )
 
-        val current = stat
-        when {
-            current == null -> Text(
-                text = "正在统计…",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        if (mode == StatsMode.DAY) {
+            val current = stat
+            when {
+                current == null -> LoadingText()
 
-            current.slices.isEmpty() -> EmptyDayCard()
+                current.slices.isEmpty() -> EmptyDayCard()
 
-            else -> {
-                TotalCard(current)
-                PieCard(current)
-                BarCard(current, onSliceClick = { vm.openTaskSessions(it) })
-                Text(
-                    text = "点某一项可以查看并修改它这一天的时间段。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                else -> {
+                    TotalCard(current)
+                    PieCard(current)
+                    BarCard(current, onSliceClick = { vm.openTaskSessions(it) })
+                    Text(
+                        text = "点某一项可以查看并修改它这一天的时间段。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
+            val current = comparison
+            when {
+                current == null -> LoadingText()
+
+                current.currentTotalMillis == 0L && current.previousTotalMillis == 0L ->
+                    EmptyRangeCard(mode)
+
+                else -> {
+                    ComparisonTotalCard(current, mode)
+                    ComparisonCard(current)
+                }
             }
         }
     }
 
-    // The aggregate above is what the day looks like; this is where the user
-    // reaches the rows behind it, which is the only way to repair a mistake.
-    taskSessions?.let { state ->
-        TaskSessionsDialog(
-            state = state,
-            nowMillis = now,
-            minutesOf = { vm.minutesOf(it) },
-            dayOf = { vm.dayOf(it) },
-            lengthOf = { d, s, e -> vm.lengthOf(d, s, e) },
-            onRetime = { id, day, start, end -> vm.retimeSession(id, day, start, end) },
-            onDelete = { id -> vm.deleteSession(id) },
-            onAdd = { day, start, end -> vm.addSessionToCurrentTask(day, start, end) },
-            onDismiss = { vm.closeTaskSessions() },
-        )
+    // The interval editor dialog is hosted in AppRoot rather than here, so the
+    // reminder card on the timer screen can open the very same one.
+}
+
+@Composable
+private fun LoadingText() {
+    Text(
+        text = "正在统计…",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun ModeSwitch(mode: StatsMode, onSelect: (StatsMode) -> Unit) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        StatsMode.entries.forEachIndexed { index, item ->
+            SegmentedButton(
+                selected = mode == item,
+                onClick = { onSelect(item) },
+                shape = SegmentedButtonDefaults.itemShape(
+                    index = index,
+                    count = StatsMode.entries.size,
+                ),
+            ) {
+                Text(item.label)
+            }
+        }
     }
 }
 
@@ -312,3 +343,144 @@ private fun EmptyDayCard() {
 
 private fun percent(part: Long, total: Long): String =
     if (total <= 0L) "0%" else String.format(java.util.Locale.US, "%.0f%%", part * 100.0 / total)
+
+// --- the week / month comparison view ----------------------------------------
+
+@Composable
+private fun ComparisonTotalCard(comparison: PeriodComparison, mode: StatsMode) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+        ) {
+            Text(
+                text = if (mode == StatsMode.WEEK) "本周总计" else "本月总计",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = Fmt.duration(comparison.currentTotalMillis),
+                style = MaterialTheme.typography.headlineMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "上一期 ${Fmt.duration(comparison.previousTotalMillis)}",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                DeltaLabel(comparison.deltaMillis)
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "${Fmt.monthDay(comparison.currentStart)} – ${Fmt.monthDay(comparison.currentEndInclusive)}" +
+                    " · 对比 ${Fmt.monthDay(comparison.previousStart)} – ${Fmt.monthDay(comparison.previousEndInclusive)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ComparisonCard(comparison: PeriodComparison) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("与上一期对比", style = MaterialTheme.typography.titleMedium)
+            if (comparison.rows.isEmpty()) {
+                Text(
+                    text = "两期都没有记录。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            comparison.rows.forEach { row -> ComparisonRowItem(row) }
+        }
+    }
+}
+
+@Composable
+private fun ComparisonRowItem(row: ComparisonRow) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Color(row.colorArgb)),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = row.name,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = Fmt.duration(row.currentMillis),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "上一期 ${Fmt.duration(row.previousMillis)}",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            DeltaLabel(row.deltaMillis)
+        }
+    }
+}
+
+/**
+ * Deliberately not colour-coded. Whether more time on a task is good or bad
+ * depends entirely on the task, and an app that paints every increase red is
+ * guessing at something it cannot know.
+ */
+@Composable
+private fun DeltaLabel(deltaMillis: Long) {
+    val text = when {
+        deltaMillis > 0L -> "↑ ${Fmt.duration(deltaMillis)}"
+        deltaMillis < 0L -> "↓ ${Fmt.duration(-deltaMillis)}"
+        else -> "持平"
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+@Composable
+private fun EmptyRangeCard(mode: StatsMode) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = if (mode == StatsMode.WEEK) "这一周没有记录" else "这个月没有记录",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "左右翻到别的期看看，或者去「计时」页开始一段。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
