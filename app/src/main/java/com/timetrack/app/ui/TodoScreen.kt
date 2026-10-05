@@ -1,5 +1,6 @@
 package com.timetrack.app.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,25 +20,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -57,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -68,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.timetrack.app.data.Todo
 import com.timetrack.app.data.TodoPeriod
 import com.timetrack.app.data.TodoScope
+import com.timetrack.app.ui.theme.Radius
 import com.timetrack.app.ui.theme.Space
 import com.timetrack.app.util.Fmt
 import java.time.LocalDate
@@ -123,22 +128,19 @@ fun TodoScreen(vm: TodoViewModel) {
             TextButton(onClick = { vm.goToToday() }) { Text("回到今天") }
         }
 
-        TodoInput(
-            hint = if (mode == TodoScope.DAY) "今天要做什么？" else "这周要完成什么？",
-            onSubmit = { vm.add(it) },
-        )
-
         when (mode) {
             TodoScope.DAY -> {
                 val day = dayTodos
                 if (day == null) {
                     LoadingText()
                 } else {
-                    TodoSection(
+                    TodoListCard(
                         title = dayListTitle(dayKey, vm),
                         items = day.own,
                         vm = vm,
+                        inputHint = "今天要做什么？",
                         emptyHint = "今天还没有待办，在上面输入一条。",
+                        onSubmit = { vm.add(it) },
                         onRename = { renaming = it },
                     )
                     WeekSection(
@@ -156,11 +158,13 @@ fun TodoScreen(vm: TodoViewModel) {
                 if (week == null) {
                     LoadingText()
                 } else {
-                    TodoSection(
+                    TodoListCard(
                         title = "本周",
                         items = week.items,
                         vm = vm,
-                        emptyHint = "本周还没有待办。",
+                        inputHint = "这周要完成什么？",
+                        emptyHint = "本周还没有待办，在上面输入一条。",
+                        onSubmit = { vm.add(it) },
                         onRename = { renaming = it },
                     )
                 }
@@ -300,87 +304,139 @@ private fun TodoInput(hint: String, onSubmit: (String) -> Unit) {
         focusManager.clearFocus()
     }
 
-    OutlinedTextField(
-        value = value,
-        onValueChange = { value = it },
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(hint) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { submit() }),
-        trailingIcon = {
-            IconButton(onClick = { submit() }, enabled = value.isNotBlank()) {
-                Icon(Icons.Filled.Add, contentDescription = "添加")
+    // A bare row rather than an outlined field: inside a card, a second box drawn
+    // around the input reads as a box inside a box. The placeholder does the
+    // labelling, and unlike a floating label it gets out of the way once there is
+    // something to read.
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = Space.lg, end = Space.sm, top = Space.sm, bottom = Space.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(modifier = Modifier.weight(1f)) {
+            if (value.isEmpty()) {
+                Text(
+                    text = hint,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-        },
-    )
+            BasicTextField(
+                value = value,
+                onValueChange = { value = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
+            )
+        }
+        if (value.isNotBlank()) {
+            IconButton(onClick = { submit() }) {
+                Icon(Icons.Filled.Check, contentDescription = "添加")
+            }
+        }
+    }
 }
 
 /**
- * A titled block of todos. Unfinished items come first — the DAO already orders
- * them that way — and the finished ones sit below a divider rather than
- * disappearing, so the day still shows what it got done.
+ * One list, one card, with the add row as its first line.
+ *
+ * A list of things to do *is* an object, so it earns a container — the earlier
+ * version went too far in the other direction and left the page as one
+ * undifferentiated column. Putting the input *inside* the card is what makes it
+ * read as "this is the list" rather than as decoration around a list, and it
+ * means the page has exactly one place to type.
+ *
+ * Unfinished items come first — the DAO already orders them that way — and the
+ * finished ones sit below a divider rather than disappearing, so the day still
+ * shows what it got done.
  */
 @Composable
-private fun TodoSection(
+private fun TodoListCard(
     title: String,
     items: List<Todo>,
     vm: TodoViewModel,
+    inputHint: String,
     emptyHint: String,
+    onSubmit: (String) -> Unit,
     onRename: (Todo) -> Unit,
 ) {
     val open = items.filter { it.doneAt == null }
     val done = items.filter { it.doneAt != null }
 
-    // No card. A card around a list says "this is an object", and a list of things
-    // to do is not an object — it is the page. A section label, the spacing and a
-    // divider do the grouping instead, and the list stops looking like one more
-    // block among many.
-    Column(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(Space.xs),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Row(
-            modifier = Modifier.padding(bottom = Space.xs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(Space.sm))
-            Text(
-                text = if (open.isEmpty() && done.isNotEmpty()) "全部完成" else "还剩 ${open.size} 项",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Space.lg, vertical = Space.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(Space.sm))
+                Text(
+                    text = if (open.isEmpty() && done.isNotEmpty()) {
+                        "全部完成"
+                    } else {
+                        "还剩 ${open.size} 项"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
-        if (items.isEmpty()) {
-            Text(
-                text = emptyHint,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-        open.forEach { todo ->
-            TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
-        }
+            TodoInput(hint = inputHint, onSubmit = onSubmit)
 
-        if (done.isNotEmpty()) {
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = Space.sm),
-                color = MaterialTheme.colorScheme.outlineVariant,
-            )
-            Text(
-                text = "已完成 ${done.size} 项",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            done.forEach { todo ->
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            if (items.isEmpty()) {
+                Text(
+                    text = emptyHint,
+                    modifier = Modifier.padding(horizontal = Space.lg, vertical = Space.lg),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            open.forEach { todo ->
                 TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
+            }
+
+            if (done.isNotEmpty()) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = Space.lg),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
+                Text(
+                    text = "已完成 ${done.size} 项",
+                    modifier = Modifier.padding(
+                        start = Space.lg,
+                        end = Space.lg,
+                        top = Space.md,
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                done.forEach { todo ->
+                    TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
+                }
             }
         }
     }
@@ -403,64 +459,81 @@ private fun WeekSection(
 ) {
     var expanded by rememberSaveable { mutableStateOf(true) }
 
-    Column(
+    // Outlined rather than filled, and the same shape as the daily list: the day
+    // is the main object, the week is context for it. One step quieter, not a
+    // different kind of thing.
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(Space.xs),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Row(
-            modifier = Modifier.padding(bottom = Space.xs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "本周",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(Space.sm))
-            Text(
-                text = if (items.isEmpty()) "没有未完成的" else "还剩 ${items.size} 项",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            // The page has one add control now. A second bare "+" up here made
-            // the user guess which one added what, so this one is labelled.
-            TextButton(onClick = onAdd) { Text("添加到本周") }
-            IconButton(onClick = { expanded = !expanded }) {
-                Icon(
-                    imageVector = if (expanded) {
-                        Icons.Filled.KeyboardArrowUp
-                    } else {
-                        Icons.Filled.KeyboardArrowDown
-                    },
-                    contentDescription = if (expanded) "收起" else "展开",
-                )
-            }
-        }
-
-        if (expanded) {
-            if (items.isEmpty() && doneThatDay.isEmpty()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = Space.lg, end = Space.sm, top = Space.sm, bottom = Space.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = "本周还没有待办。添加一条，它会在这一周每天都出现。",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "本周",
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-            items.forEach { todo ->
-                TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
-            }
-            if (doneThatDay.isNotEmpty()) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = Space.sm),
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                )
+                Spacer(Modifier.width(Space.sm))
                 Text(
-                    text = "当天完成的本周事项",
+                    text = if (items.isEmpty()) "没有未完成的" else "还剩 ${items.size} 项",
+                    modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                doneThatDay.forEach { todo ->
+                // The page has one add control now. A second bare "+" up here made
+                // the user guess which one added what, so this one is labelled.
+                TextButton(onClick = onAdd) { Text("添加") }
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        imageVector = if (expanded) {
+                            Icons.Filled.KeyboardArrowUp
+                        } else {
+                            Icons.Filled.KeyboardArrowDown
+                        },
+                        contentDescription = if (expanded) "收起" else "展开",
+                    )
+                }
+            }
+
+            if (expanded) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                if (items.isEmpty() && doneThatDay.isEmpty()) {
+                    Text(
+                        text = "本周还没有待办。添加一条，它会在这一周每天都出现。",
+                        modifier = Modifier.padding(horizontal = Space.lg, vertical = Space.lg),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                items.forEach { todo ->
                     TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
+                }
+                if (doneThatDay.isNotEmpty()) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = Space.lg),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    Text(
+                        text = "当天完成的本周事项",
+                        modifier = Modifier.padding(
+                            start = Space.lg,
+                            end = Space.lg,
+                            top = Space.md,
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    doneThatDay.forEach { todo ->
+                        TodoRow(todo = todo, vm = vm, onRename = { onRename(todo) })
+                    }
                 }
             }
         }
@@ -507,7 +580,7 @@ private fun TodoRow(todo: Todo, vm: TodoViewModel, onRename: () -> Unit) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(Radius.control))
                 .combinedClickable(
                     onClick = {
                         tap()
@@ -515,29 +588,33 @@ private fun TodoRow(todo: Todo, vm: TodoViewModel, onRename: () -> Unit) {
                     },
                     onLongClick = onRename,
                 ),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(Radius.control),
             color = Color.Transparent,
         ) {
             Row(
-                modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                modifier = Modifier.padding(horizontal = Space.lg, vertical = Space.md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (done) {
                     Icon(
                         imageVector = Icons.Filled.CheckCircle,
                         contentDescription = "已完成",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp),
                     )
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(22.dp)
+                            .size(24.dp)
                             .clip(CircleShape)
-                            .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape),
+                            .border(
+                                width = 1.5.dp,
+                                color = MaterialTheme.colorScheme.outline,
+                                shape = CircleShape,
+                            ),
                     )
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(Space.md))
                 Text(
                     text = todo.title,
                     modifier = Modifier.weight(1f),
