@@ -1,7 +1,12 @@
 package com.timetrack.app.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -21,6 +26,14 @@ import kotlin.math.min
  *
  * Slices are expected to be sorted largest-first, so the ring reads clockwise
  * from the top with the biggest contributor first.
+ *
+ * The ring sweeps in when the set of tasks changes, which is what makes stepping
+ * through days look like a transition instead of a jump cut. The animation is
+ * keyed on *which* tasks are present rather than on their durations, because a
+ * running task changes its value every second: keying on the values would
+ * restart the sweep on every tick and make the chart twitch rather than breathe.
+ * The per-second growth still shows, because the slice proportions are read from
+ * the current list while the sweep plays.
  */
 @Composable
 fun DonutChart(
@@ -30,6 +43,16 @@ fun DonutChart(
 ) {
     val total = slices.sumOf { it.millis }
     if (total <= 0L) return
+
+    val signature = slices.joinToString(",") { it.taskId.toString() }
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(signature) {
+        progress.snapTo(0f)
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        )
+    }
 
     Canvas(modifier) {
         val stroke = strokeWidth.toPx()
@@ -41,10 +64,11 @@ fun DonutChart(
             y = (size.height - diameter) / 2f,
         )
         val arcSize = Size(diameter, diameter)
+        val scale = progress.value
 
         var startAngle = -90f
         for (slice in slices) {
-            val sweep = slice.millis.toFloat() / total.toFloat() * 360f
+            val sweep = slice.millis.toFloat() / total.toFloat() * 360f * scale
             if (sweep <= 0f) continue
             drawArc(
                 color = Color(slice.colorArgb),

@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -156,7 +157,7 @@ private fun DateNavigator(
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -267,12 +268,16 @@ private fun BarCard(stat: DayStat, onSliceClick: (TaskSlice) -> Unit) {
 
 @Composable
 private fun BarRow(slice: TaskSlice, total: Long, onClick: () -> Unit) {
+    val tap = rememberFirmTap()
     val fraction = if (total <= 0L) 0f else (slice.millis.toFloat() / total.toFloat())
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
+            .clickable {
+                tap()
+                onClick()
+            }
             .padding(vertical = 4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -324,20 +329,11 @@ private fun BarRow(slice: TaskSlice, total: Long, onClick: () -> Unit) {
 @Composable
 private fun EmptyDayCard() {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("这一天没有记录", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "去「计时」页开始一段，统计会自动出现在这里",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        EmptyState(
+            icon = Icons.Filled.DateRange,
+            title = "这一天没有记录",
+            hint = "去「计时」页开始一段，统计会自动出现在这里。",
+        )
     }
 }
 
@@ -465,22 +461,10 @@ private fun DeltaLabel(deltaMillis: Long) {
 @Composable
 private fun EmptyRangeCard(mode: StatsMode) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = if (mode == StatsMode.WEEK) "这一周没有记录" else "这个月没有记录",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "左右翻到别的期看看，或者去「计时」页开始一段。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        EmptyState(
+            icon = Icons.Filled.DateRange,
+            title = if (mode == StatsMode.WEEK) "这一周没有记录" else "这个月没有记录",
+            hint = "左右翻到别的期看看，或者去「计时」页开始一段。",
+        )
     }
 }

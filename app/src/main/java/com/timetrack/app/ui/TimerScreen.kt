@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -112,11 +113,13 @@ fun TimerScreen(vm: AppViewModel) {
         }
 
         if (recents.isEmpty()) {
-            Text(
-                text = "在上面输入第一件事就能开始计时。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Card(modifier = Modifier.fillMaxWidth()) {
+                EmptyState(
+                    icon = Icons.Filled.PlayArrow,
+                    title = "还没有任何任务",
+                    hint = "在上面输入第一件事，回车就开始计时。之后它会出现在这里，点一下即可切换。",
+                )
+            }
         } else {
             recents.forEach { task ->
                 TaskRow(
@@ -157,6 +160,7 @@ fun TimerScreen(vm: AppViewModel) {
 
 @Composable
 private fun RunningCard(running: SessionWithTask?, now: Long, onStop: () -> Unit) {
+    val tap = rememberFirmTap()
     val isRunning = running != null
     val elapsed = running?.let { (now - it.startTime).coerceAtLeast(0L) } ?: 0L
 
@@ -193,13 +197,23 @@ private fun RunningCard(running: SessionWithTask?, now: Long, onStop: () -> Unit
                     )
                 }
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    text = Fmt.clock(elapsed),
-                    fontSize = 56.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // Sized from the space actually available: `1:02:03` has to
+                    // fit on a narrow phone instead of being clipped, and a big
+                    // screen should get a clock worth looking at.
+                    val clockSize = (maxWidth.value / 6f).coerceIn(34f, 64f).sp
+                    Text(
+                        text = Fmt.clock(elapsed),
+                        fontSize = clockSize,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                    )
+                }
                 Text(
                     text = "开始于 ${Fmt.timeOfDay(running.startTime)}",
                     style = MaterialTheme.typography.bodyMedium,
@@ -207,7 +221,10 @@ private fun RunningCard(running: SessionWithTask?, now: Long, onStop: () -> Unit
                 )
                 Spacer(Modifier.height(20.dp))
                 Button(
-                    onClick = onStop,
+                    onClick = {
+                        tap()
+                        onStop()
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -242,6 +259,7 @@ private fun LongRunningCard(
     onStop: () -> Unit,
     onFixEnd: () -> Unit,
 ) {
+    val tap = rememberFirmTap()
     if (session == null) return
     val elapsed = (now - session.startTime).coerceAtLeast(0L)
 
@@ -274,10 +292,22 @@ private fun LongRunningCard(
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onStop, modifier = Modifier.weight(1f)) {
+                Button(
+                    onClick = {
+                        tap()
+                        onStop()
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
                     Text("结束到现在")
                 }
-                OutlinedButton(onClick = onFixEnd, modifier = Modifier.weight(1f)) {
+                OutlinedButton(
+                    onClick = {
+                        tap()
+                        onFixEnd()
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
                     Text("改成更早")
                 }
             }
@@ -291,6 +321,7 @@ private fun NewTaskCard(
     onValueChange: (String) -> Unit,
     onSubmit: () -> Unit,
 ) {
+    val tap = rememberFirmTap()
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -317,7 +348,10 @@ private fun NewTaskCard(
                 },
             )
             Button(
-                onClick = onSubmit,
+                onClick = {
+                    tap()
+                    onSubmit()
+                },
                 enabled = value.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -333,11 +367,15 @@ private fun NewTaskCard(
 
 @Composable
 private fun TaskRow(task: Task, isRunning: Boolean, onClick: () -> Unit) {
+    val tap = rememberFirmTap()
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick),
+            .clickable {
+                tap()
+                onClick()
+            },
         shape = RoundedCornerShape(14.dp),
         color = if (isRunning) {
             MaterialTheme.colorScheme.primaryContainer

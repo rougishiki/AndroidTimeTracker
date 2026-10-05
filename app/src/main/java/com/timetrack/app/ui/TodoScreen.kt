@@ -275,7 +275,7 @@ private fun PeriodNavigator(
                 .weight(1f)
                 .clickable(onClick = onPick)
                 .padding(vertical = 8.dp),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleLarge,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -455,10 +455,12 @@ private fun WeekSection(
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun TodoRow(todo: Todo, vm: TodoViewModel, onRename: () -> Unit) {
+    val tap = rememberFirmTap()
     val done = todo.doneAt != null
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
+                tap()
                 vm.delete(todo)
                 true
             } else {
@@ -491,7 +493,13 @@ private fun TodoRow(todo: Todo, vm: TodoViewModel, onRename: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
-                .combinedClickable(onClick = { vm.toggle(todo) }, onLongClick = onRename),
+                .combinedClickable(
+                    onClick = {
+                        tap()
+                        vm.toggle(todo)
+                    },
+                    onLongClick = onRename,
+                ),
             shape = RoundedCornerShape(14.dp),
             color = Color.Transparent,
         ) {
