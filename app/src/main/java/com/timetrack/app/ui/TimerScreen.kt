@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,8 +58,11 @@ fun TimerScreen(vm: AppViewModel) {
     val running by vm.running.collectAsStateWithLifecycle()
     val now by vm.now.collectAsStateWithLifecycle()
     val recents by vm.recentTasks.collectAsStateWithLifecycle()
+    val allTasks by vm.allTasks.collectAsStateWithLifecycle()
 
     var input by rememberSaveable { mutableStateOf("") }
+    var showManualEntry by rememberSaveable { mutableStateOf(false) }
+    var showTaskAdmin by rememberSaveable { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
     fun submit() {
@@ -83,14 +87,28 @@ fun TimerScreen(vm: AppViewModel) {
             onSubmit = { submit() },
         )
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (recents.isEmpty()) "还没有任务" else "点击即可切换任务",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            // Backfilling and tidying up both belong next to the task list, not
+            // buried in a settings screen.
+            TextButton(onClick = { showManualEntry = true }) { Text("补记一段") }
+            TextButton(onClick = { showTaskAdmin = true }) { Text("管理任务") }
+        }
+
         if (recents.isEmpty()) {
             Text(
-                text = "还没有任何任务。在上面输入第一件事就能开始。",
+                text = "在上面输入第一件事就能开始计时。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            Text("点击即可切换任务", style = MaterialTheme.typography.titleSmall)
             recents.forEach { task ->
                 TaskRow(
                     task = task,
@@ -99,6 +117,32 @@ fun TimerScreen(vm: AppViewModel) {
                 )
             }
         }
+    }
+
+    if (showManualEntry) {
+        SessionTimeDialog(
+            title = "补记一段",
+            initialDay = vm.today(),
+            initialStartMinutes = (vm.nowMinutes() - 60).coerceAtLeast(0),
+            initialEndMinutes = vm.nowMinutes(),
+            lengthOf = { d, s, e -> vm.lengthOf(d, s, e) },
+            nameLabel = "任务名",
+            note = "补记不会影响正在进行的计时，随时可以改日期。",
+            onConfirm = { name, day, start, end ->
+                vm.addManualEntry(name, day, start, end)
+                showManualEntry = false
+            },
+            onDismiss = { showManualEntry = false },
+        )
+    }
+
+    if (showTaskAdmin) {
+        TaskAdminDialog(
+            tasks = allTasks,
+            onRename = { task, name -> vm.renameTask(task, name) },
+            onArchive = { task, archived -> vm.setTaskArchived(task, archived) },
+            onDismiss = { showTaskAdmin = false },
+        )
     }
 }
 

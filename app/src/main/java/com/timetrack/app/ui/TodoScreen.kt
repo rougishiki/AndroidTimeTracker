@@ -720,36 +720,3 @@ private fun MonthHeader(month: YearMonth, onShowMonth: (YearMonth) -> Unit) {
         }
     }
 }
-
-@Composable
-private fun TextInputDialog(
-    title: String,
-    label: String,
-    initial: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var value by rememberSaveable { mutableStateOf(initial) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = value,
-                onValueChange = { value = it },
-                label = { Text(label) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onConfirm(value) }),
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(value) },
-                enabled = value.isNotBlank(),
-            ) { Text("确定") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
-}

@@ -1,6 +1,7 @@
 package com.timetrack.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +45,8 @@ import java.time.LocalDate
 fun StatsScreen(vm: AppViewModel) {
     val date by vm.statsDate.collectAsStateWithLifecycle()
     val stat by vm.dayStat.collectAsStateWithLifecycle()
+    val taskSessions by vm.taskSessions.collectAsStateWithLifecycle()
+    val now by vm.now.collectAsStateWithLifecycle()
     val today = LocalDate.now()
 
     Column(
@@ -74,9 +77,30 @@ fun StatsScreen(vm: AppViewModel) {
             else -> {
                 TotalCard(current)
                 PieCard(current)
-                BarCard(current)
+                BarCard(current, onSliceClick = { vm.openTaskSessions(it) })
+                Text(
+                    text = "点某一项可以查看并修改它这一天的时间段。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
+    }
+
+    // The aggregate above is what the day looks like; this is where the user
+    // reaches the rows behind it, which is the only way to repair a mistake.
+    taskSessions?.let { state ->
+        TaskSessionsDialog(
+            state = state,
+            nowMillis = now,
+            minutesOf = { vm.minutesOf(it) },
+            dayOf = { vm.dayOf(it) },
+            lengthOf = { d, s, e -> vm.lengthOf(d, s, e) },
+            onRetime = { id, day, start, end -> vm.retimeSession(id, day, start, end) },
+            onDelete = { id -> vm.deleteSession(id) },
+            onAdd = { day, start, end -> vm.addSessionToCurrentTask(day, start, end) },
+            onDismiss = { vm.closeTaskSessions() },
+        )
     }
 }
 
@@ -190,7 +214,7 @@ private fun PieCard(stat: DayStat) {
 }
 
 @Composable
-private fun BarCard(stat: DayStat) {
+private fun BarCard(stat: DayStat, onSliceClick: (TaskSlice) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -200,16 +224,26 @@ private fun BarCard(stat: DayStat) {
         ) {
             Text("各项时长", style = MaterialTheme.typography.titleMedium)
             stat.slices.forEach { slice ->
-                BarRow(slice = slice, total = stat.totalMillis)
+                BarRow(
+                    slice = slice,
+                    total = stat.totalMillis,
+                    onClick = { onSliceClick(slice) },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun BarRow(slice: TaskSlice, total: Long) {
+private fun BarRow(slice: TaskSlice, total: Long, onClick: () -> Unit) {
     val fraction = if (total <= 0L) 0f else (slice.millis.toFloat() / total.toFloat())
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
