@@ -111,31 +111,40 @@ fun TodoScreen(vm: TodoViewModel) {
             .padding(horizontal = Space.pageH, vertical = Space.pageV),
         verticalArrangement = Arrangement.spacedBy(Space.xl),
     ) {
-        Row(
+        // The mode switch and the period navigator are one block of chrome, so
+        // they sit close together; the block gap goes between them and the list.
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(Space.xs),
         ) {
-            Box(modifier = Modifier.weight(1f)) {
-                ModeSwitch(mode = mode, onSelect = { vm.setMode(it) })
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    ModeSwitch(mode = mode, onSelect = { vm.setMode(it) })
+                }
+                // Beside the mode switch rather than on a row of its own: giving a
+                // single secondary action its own row spends a whole line of the
+                // screen on something rarely pressed.
+                if (!onToday || mode == TodoScope.WEEK) {
+                    TextButton(onClick = { vm.goToToday() }) { Text("回到今天") }
+                }
             }
-            // Beside the mode switch rather than on a row of its own: giving a
-            // single secondary action its own row spends a whole line of the
-            // screen on something rarely pressed.
-            if (!onToday || mode == TodoScope.WEEK) {
-                TextButton(onClick = { vm.goToToday() }) { Text("回到今天") }
-            }
-        }
 
-        PeriodNavigator(
-            label = if (mode == TodoScope.DAY) {
-                vm.dayLabel(dayKey)
-            } else {
-                currentWeek?.let { vm.weekLabel(it.weekKey) } ?: "正在载入…"
-            },
-            onPrev = { vm.shift(-1) },
-            onNext = { vm.shift(1) },
-            onPick = { if (mode == TodoScope.DAY) showDayPicker = true else showWeekPicker = true },
-        )
+            PeriodNavigator(
+                label = if (mode == TodoScope.DAY) {
+                    vm.dayLabel(dayKey)
+                } else {
+                    currentWeek?.let { vm.weekLabel(it.weekKey) } ?: "正在载入…"
+                },
+                onPrev = { vm.shift(-1) },
+                onNext = { vm.shift(1) },
+                onPick = {
+                    if (mode == TodoScope.DAY) showDayPicker = true else showWeekPicker = true
+                },
+            )
+        }
 
         when (mode) {
             TodoScope.DAY -> {
@@ -260,9 +269,12 @@ private fun ModeSwitch(mode: TodoScope, onSelect: (TodoScope) -> Unit) {
                 selected = mode == scope,
                 onClick = { onSelect(scope) },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-            ) {
-                Text(label)
-            }
+                // No tick. Material shows one on the selected segment by default,
+                // which suits a multi-select filter but reads as "confirmed" on a
+                // two-way view switch.
+                icon = {},
+                label = { Text(label) },
+            )
         }
     }
 }
@@ -600,7 +612,11 @@ private fun TodoRow(todo: Todo, vm: TodoViewModel, onRename: () -> Unit) {
                     onLongClick = onRename,
                 ),
             shape = RoundedCornerShape(Radius.control),
-            color = Color.Transparent,
+            // Opaque, and the same colour as the card it sits on. It was
+            // transparent, which let the swipe-to-delete background show through
+            // and painted every row pink with a bin on it. The delete layer is
+            // meant to be revealed by a swipe, not to be permanently on display.
+            color = MaterialTheme.colorScheme.surface,
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = Space.lg, vertical = Space.md),

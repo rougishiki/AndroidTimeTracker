@@ -195,9 +195,11 @@ private fun ModeSwitch(mode: StatsMode, onSelect: (StatsMode) -> Unit) {
                     index = index,
                     count = StatsMode.entries.size,
                 ),
-            ) {
-                Text(item.label)
-            }
+                // No tick, for the same reason as the todo page: it reads as
+                // "confirmed" rather than "currently showing".
+                icon = {},
+                label = { Text(item.label) },
+            )
         }
     }
 }
