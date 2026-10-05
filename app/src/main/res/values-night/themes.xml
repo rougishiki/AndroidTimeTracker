@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark-aware launch background so the app does not flash white on a dark theme. -->
+    <style name="Theme.TimeTrack" parent="android:Theme.Material.NoActionBar" />
+</resources>

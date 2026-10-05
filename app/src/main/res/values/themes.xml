@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose draws the entire UI; this theme only needs to remove the action
+         bar and give the window a background that matches the light scheme. -->
+    <style name="Theme.TimeTrack" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
