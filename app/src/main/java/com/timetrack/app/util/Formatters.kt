@@ -66,13 +66,23 @@ object Fmt {
 
     private val WEEKDAYS = arrayOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
-    /** `2026年5月4日 周一`, with 今天/昨天 shortcuts. */
+    /**
+     * `今天，10月6日` / `昨天，10月5日` / `10月3日 周五`.
+     *
+     * Deliberately short. The previous full form — `2026年10月6日 周二` — was long
+     * enough to be ellipsised in the period navigator, so the one piece of
+     * navigation text on the screen could not actually be read. The year only
+     * appears when it differs from today's, which is also the only time it
+     * carries any information.
+     */
     fun dayLabel(date: LocalDate, today: LocalDate): String {
-        val base = "${date.year}年${date.monthValue}月${date.dayOfMonth}日 ${WEEKDAYS[date.dayOfWeek.value - 1]}"
-        return when (date) {
-            today -> "今天 · $base"
-            today.minusDays(1) -> "昨天 · $base"
-            else -> base
+        val day = MONTH_DAY.format(date)
+        val weekday = WEEKDAYS[date.dayOfWeek.value - 1]
+        return when {
+            date == today -> "今天，$day"
+            date == today.minusDays(1) -> "昨天，$day"
+            date.year != today.year -> "${date.year}年$day $weekday"
+            else -> "$day $weekday"
         }
     }
 
@@ -90,7 +100,19 @@ object Fmt {
     /** `10月5日`, for cells and week rows. */
     fun monthDay(date: LocalDate): String = MONTH_DAY.format(date)
 
-    /** `10月5日 – 10月11日`, the label of one ISO week. */
+    /** `10月5日 – 10月11日`. For the week picker, which has the room for it. */
     fun weekRange(monday: LocalDate): String =
         "${MONTH_DAY.format(monday)} – ${MONTH_DAY.format(monday.plusDays(6))}"
+
+    private val MONTH_DAY_SLASH: DateTimeFormatter = DateTimeFormatter.ofPattern("M/d")
+
+    /**
+     * `10/5–10/11`, for the period navigator.
+     *
+     * Numeric rather than spelled out because the navigator shares its line with
+     * two arrows and a calendar button; `10月5日 – 10月11日` does not fit there,
+     * and a truncated date is worse than a compact one.
+     */
+    fun weekRangeShort(monday: LocalDate): String =
+        "${MONTH_DAY_SLASH.format(monday)}–${MONTH_DAY_SLASH.format(monday.plusDays(6))}"
 }

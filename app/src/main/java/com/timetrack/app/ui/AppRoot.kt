@@ -1,13 +1,9 @@
 package com.timetrack.app.ui
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -23,19 +19,30 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.timetrack.app.R
 import com.timetrack.app.StartRequest
 import com.timetrack.app.TimeTrackApp
 import com.timetrack.app.service.TimerService
 
-private enum class Tab(val label: String, val icon: ImageVector) {
-    TIMER("计时", Icons.Filled.PlayArrow),
-    TODO("待办", Icons.Filled.CheckCircle),
-    STATS("统计", Icons.Filled.DateRange),
-    EXPORT("导出", Icons.Filled.Share),
+/**
+ * Icons are local vectors rather than `material-icons-core`: that set has no
+ * download glyph, and dropping one filled icon into an otherwise outline row is
+ * exactly the inconsistency that makes an app look assembled rather than
+ * designed. Four vectors cost a few KB and let the whole row share one spec —
+ * 24dp grid, 1.75dp stroke, round caps.
+ *
+ * "导出" is called "备份" because that is the user's mental model: the point is
+ * not to produce a file, it is to not lose the data.
+ */
+private enum class Tab(val label: String, @DrawableRes val iconRes: Int) {
+    TIMER("计时", R.drawable.ic_nav_timer),
+    TODO("待办", R.drawable.ic_nav_todo),
+    STATS("统计", R.drawable.ic_nav_stats),
+    BACKUP("备份", R.drawable.ic_nav_backup),
 }
 
 @Composable
@@ -110,7 +117,12 @@ fun AppRoot() {
                     NavigationBarItem(
                         selected = tab == item,
                         onClick = { tab = item },
-                        icon = { Icon(item.icon, contentDescription = item.label) },
+                        icon = {
+                            Icon(
+                                painter = painterResource(item.iconRes),
+                                contentDescription = item.label,
+                            )
+                        },
                         label = { Text(item.label) },
                     )
                 }
@@ -126,7 +138,7 @@ fun AppRoot() {
                 Tab.TIMER -> TimerScreen(vm)
                 Tab.TODO -> TodoScreen(todoVm)
                 Tab.STATS -> StatsScreen(vm)
-                Tab.EXPORT -> ExportScreen(vm)
+                Tab.BACKUP -> ExportScreen(vm)
             }
         }
     }

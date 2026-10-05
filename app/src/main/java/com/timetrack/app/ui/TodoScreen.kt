@@ -167,12 +167,8 @@ fun TodoScreen(vm: TodoViewModel) {
             }
         }
 
-        Text(
-            text = "打勾表示完成。日待办每天早上都是空的；本周的事做完一次就算完成。" +
-                "左滑删除，长按重命名。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        // The three-line explanation that used to sit here now lives in the help
+        // dialog, reachable from the timer screen's ⓘ.
     }
 
     if (showDayPicker) {
@@ -275,7 +271,7 @@ private fun PeriodNavigator(
                 .weight(1f)
                 .clickable(onClick = onPick)
                 .padding(vertical = 8.dp),
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.titleMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

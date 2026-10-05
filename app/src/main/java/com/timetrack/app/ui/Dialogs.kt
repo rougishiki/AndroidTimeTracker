@@ -234,6 +234,9 @@ fun TaskSessionsDialog(
 ) {
     var editing by remember { mutableStateOf<SessionWithTask?>(null) }
     var adding by remember { mutableStateOf(false) }
+    // Deleting an interval is the one genuinely irreversible action here, so it
+    // goes through a confirmation rather than firing on the first tap.
+    var deleting by remember { mutableStateOf<SessionWithTask?>(null) }
 
     val total = state.sessions.sumOf { s ->
         ((s.endTime ?: nowMillis).coerceAtLeast(s.startTime)) - s.startTime
@@ -267,7 +270,7 @@ fun TaskSessionsDialog(
                         nowMillis = nowMillis,
                         minutesOf = minutesOf,
                         onEdit = { editing = session },
-                        onDelete = { onDelete(session.id) },
+                        onDelete = { deleting = session },
                     )
                 }
 
@@ -275,15 +278,47 @@ fun TaskSessionsDialog(
                 OutlinedButton(
                     onClick = { adding = true },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("补记一段") }
-                Text(
-                    text = "删除是彻底的，不保留历史。结束时间早于开始时间表示跨到次日。",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                ) { Text("补录时间段") }
             }
         },
     )
+
+    // The static footer that used to sit at the bottom of this dialog said two
+    // things. One — "an earlier end means the next day" — is already said inline
+    // by the editor the moment the two times cross. The other belongs where the
+    // user actually needs it: in front of the delete.
+    deleting?.let { session ->
+        val start = minutesOf(session.startTime)
+        val end = session.endTime?.let(minutesOf)
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("删除这一段？") },
+            text = {
+                Text(
+                    text = buildString {
+                        append(Fmt.monthDay(state.day))
+                        append("  ")
+                        append(SessionTimes.label(start))
+                        if (end != null) append(" – ${SessionTimes.label(end)}")
+                        append("\n删除后无法恢复，这一天的统计会同步减少。")
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete(session.id)
+                        deleting = null
+                    },
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleting = null }) { Text("取消") }
+            },
+        )
+    }
 
     editing?.let { session ->
         SessionTimeDialog(
@@ -395,13 +430,9 @@ fun TaskAdminDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(
-                    text = "重命名为已有任务名会把两个任务合并，历史记录都保留。归档只是从计时页隐藏。",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(6.dp))
-
+                // The paragraph explaining merging used to sit here. Renaming
+                // onto a taken name already answers with "已合并到「X」", so the
+                // paragraph was pre-empting a message the user will actually see.
                 if (active.isEmpty()) {
                     Text(
                         text = "还没有任何任务。",

@@ -157,7 +157,7 @@ private fun DateNavigator(
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -196,11 +196,6 @@ private fun TotalCard(stat: DayStat) {
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = "${stat.slices.size} 项任务",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = "${Fmt.hours(stat.totalMillis)} 小时",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -136,7 +136,7 @@ class TodoViewModel(private val repo: TodoRepository) : ViewModel() {
 
     fun weekLabel(weekKey: String): String {
         val monday = TodoPeriod.parseWeekKey(weekKey)
-        return "第 ${TodoPeriod.weekNumber(monday)} 周 · ${Fmt.weekRange(monday)}"
+        return "第${TodoPeriod.weekNumber(monday)}周 · ${Fmt.weekRangeShort(monday)}"
     }
 
     // --- edits ---------------------------------------------------------------

@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -66,6 +67,7 @@ fun TimerScreen(vm: AppViewModel) {
     var input by rememberSaveable { mutableStateOf("") }
     var showManualEntry by rememberSaveable { mutableStateOf(false) }
     var showTaskAdmin by rememberSaveable { mutableStateOf(false) }
+    var showHelp by rememberSaveable { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
     fun submit() {
@@ -108,8 +110,11 @@ fun TimerScreen(vm: AppViewModel) {
             )
             // Backfilling and tidying up both belong next to the task list, not
             // buried in a settings screen.
-            TextButton(onClick = { showManualEntry = true }) { Text("补记一段") }
+            TextButton(onClick = { showManualEntry = true }) { Text("补录时间") }
             TextButton(onClick = { showTaskAdmin = true }) { Text("管理任务") }
+            IconButton(onClick = { showHelp = true }) {
+                Icon(Icons.Filled.Info, contentDescription = "使用说明")
+            }
         }
 
         if (recents.isEmpty()) {
@@ -133,7 +138,7 @@ fun TimerScreen(vm: AppViewModel) {
 
     if (showManualEntry) {
         SessionTimeDialog(
-            title = "补记一段",
+            title = "补录时间",
             initialDay = vm.today(),
             initialStartMinutes = (vm.nowMinutes() - 60).coerceAtLeast(0),
             initialEndMinutes = vm.nowMinutes(),
@@ -155,6 +160,10 @@ fun TimerScreen(vm: AppViewModel) {
             onArchive = { task, archived -> vm.setTaskArchived(task, archived) },
             onDismiss = { showTaskAdmin = false },
         )
+    }
+
+    if (showHelp) {
+        HelpDialog(onDismiss = { showHelp = false })
     }
 }
 
@@ -327,9 +336,8 @@ private fun NewTaskCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("新建任务并开始计时", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
                 value = value,
                 onValueChange = onValueChange,
@@ -359,8 +367,19 @@ private fun NewTaskCard(
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("开始计时")
+                Text("创建并开始计时")
             }
+            // Earns its line twice: it explains why the button is disabled, and
+            // it teaches that the keyboard's enter key does the same thing.
+            Text(
+                text = if (value.isBlank()) {
+                    "输入任务名后即可创建并开始"
+                } else {
+                    "回车也可以直接开始"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

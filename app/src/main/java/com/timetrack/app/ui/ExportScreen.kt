@@ -86,7 +86,7 @@ fun ExportScreen(vm: AppViewModel) {
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("导出范围", style = MaterialTheme.typography.titleMedium)
+                Text("范围", style = MaterialTheme.typography.titleMedium)
                 ExportRange.entries.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         pair.forEach { option ->
@@ -108,7 +108,7 @@ fun ExportScreen(vm: AppViewModel) {
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("选择格式", style = MaterialTheme.typography.titleMedium)
+                Text("格式", style = MaterialTheme.typography.titleMedium)
 
                 Button(
                     onClick = {
@@ -121,10 +121,10 @@ fun ExportScreen(vm: AppViewModel) {
                         .fillMaxWidth()
                         .height(52.dp),
                 ) {
-                    Text("导出 CSV")
+                    Text("保存 CSV")
                 }
                 Text(
-                    text = "每段记录一行，含任务名、开始/结束时间和时长。带 UTF-8 BOM，Excel / WPS 双击直接打开不乱码。",
+                    text = "每段计时一行，用 Excel / WPS 打开。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -142,10 +142,10 @@ fun ExportScreen(vm: AppViewModel) {
                         .fillMaxWidth()
                         .height(52.dp),
                 ) {
-                    Text("导出 JSON")
+                    Text("保存 JSON")
                 }
                 Text(
-                    text = "结构化完整备份：计时记录按所选范围导出，待办列表始终全量导出（含完成时间），适合自己写脚本进一步分析。",
+                    text = "完整备份：计时记录按所选范围导出，待办列表全量导出。换手机时用这个。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

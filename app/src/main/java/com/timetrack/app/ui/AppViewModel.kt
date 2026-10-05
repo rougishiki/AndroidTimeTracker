@@ -220,7 +220,7 @@ class AppViewModel(
             StatsMode.DAY -> Fmt.dayLabel(day, repo.today())
             StatsMode.WEEK -> {
                 val monday = StatsPeriod.mondayOf(day)
-                "第 ${StatsPeriod.weekNumber(monday)} 周 · ${Fmt.weekRange(monday)}"
+                "第${StatsPeriod.weekNumber(monday)}周 · ${Fmt.weekRangeShort(monday)}"
             }
 
             StatsMode.MONTH -> Fmt.monthTitle(YearMonth.from(day))

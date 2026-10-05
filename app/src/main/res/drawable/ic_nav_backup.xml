@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Arrow into a tray: "back up", not "share". Replaces the share glyph that
+     made the page read as a share sheet. Same outline spec as the others. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.75"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M5,14 v4.5 a1.5,1.5 0 0,0 1.5,1.5 h11 a1.5,1.5 0 0,0 1.5,-1.5 V14 M12,3.5 v11 M8,10.5 l4,4 l4,-4" />
+</vector>
