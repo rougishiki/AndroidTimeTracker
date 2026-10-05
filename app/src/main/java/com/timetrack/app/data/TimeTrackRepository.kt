@@ -87,16 +87,24 @@ class TimeTrackRepository(
     suspend fun rangeStat(since: LocalDate, untilExclusive: LocalDate): RangeStat {
         val windowStart = startOfDay(since)
         val windowEnd = startOfDay(untilExclusive)
+        val now = clock()
+        val sessions = dao.getSessionsOverlapping(windowStart, windowEnd)
         val slices = StatsCalculator.aggregate(
-            sessions = dao.getSessionsOverlapping(windowStart, windowEnd),
+            sessions = sessions,
             windowStart = windowStart,
             windowEnd = windowEnd,
-            now = clock(),
+            now = now,
         )
         return RangeStat(
             start = since,
             endInclusive = untilExclusive.minusDays(1),
             totalMillis = slices.sumOf { it.millis },
+            intervalCount = StatsCalculator.contributingIntervals(
+                sessions = sessions,
+                windowStart = windowStart,
+                windowEnd = windowEnd,
+                now = now,
+            ),
             slices = slices,
         )
     }
@@ -129,6 +137,7 @@ class TimeTrackRepository(
         return DayStat(
             dayStart = startOfDay(date),
             totalMillis = stat.totalMillis,
+            intervalCount = stat.intervalCount,
             slices = stat.slices,
         )
     }

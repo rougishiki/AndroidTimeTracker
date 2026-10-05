@@ -14,6 +14,8 @@ data class TaskSlice(
 data class DayStat(
     val dayStart: Long,
     val totalMillis: Long,
+    /** How many intervals contributed; the divisor for an average session. */
+    val intervalCount: Int,
     val slices: List<TaskSlice>,
 )
 
@@ -74,6 +76,8 @@ data class RangeStat(
     val start: LocalDate,
     val endInclusive: LocalDate,
     val totalMillis: Long,
+    /** How many intervals contributed; the divisor for an average session. */
+    val intervalCount: Int,
     val slices: List<TaskSlice>,
 )
 

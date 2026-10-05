@@ -231,4 +231,41 @@ class StatsCalculatorTest {
     fun `compare of two empty periods is empty`() {
         assertTrue(StatsCalculator.compare(emptyList(), emptyList()).isEmpty())
     }
+
+    // ---------- counting intervals ----------
+
+    @Test
+    fun `contributing intervals counts rows, not tasks`() {
+        val base = 1_700_000_000_000L
+        // Three rows, two tasks, all inside the window.
+        val count = StatsCalculator.contributingIntervals(
+            sessions = listOf(
+                session(taskId = 1, name = "A", start = base, end = base + 10 * minute),
+                session(taskId = 1, name = "A", start = base + hour, end = base + hour + 10 * minute),
+                session(taskId = 2, name = "B", start = base + 2 * hour, end = base + 2 * hour + 10 * minute),
+            ),
+            windowStart = base - day,
+            windowEnd = base + day,
+            now = base + day,
+        )
+        assertEquals(3, count)
+    }
+
+    @Test
+    fun `contributing intervals skips rows the window clips to nothing`() {
+        val base = 1_700_000_000_000L
+        val count = StatsCalculator.contributingIntervals(
+            sessions = listOf(
+                session(taskId = 1, name = "里面", start = base, end = base + 10 * minute),
+                session(taskId = 2, name = "完全在外面", start = base + 5 * day, end = base + 5 * day + hour),
+                // An interval that ends before it starts is what a clock change
+                // can produce; it must not be counted either.
+                session(taskId = 3, name = "负的", start = base, end = base - hour),
+            ),
+            windowStart = base - day,
+            windowEnd = base + day,
+            now = base + day,
+        )
+        assertEquals(1, count)
+    }
 }

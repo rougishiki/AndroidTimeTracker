@@ -25,11 +25,7 @@ object StatsCalculator {
     ): List<TaskSlice> {
         val buckets = LinkedHashMap<Long, TaskSlice>()
         for (s in sessions) {
-            // Guard against a clock that moved backwards: never produce a negative span.
-            val end = (s.endTime ?: now).coerceAtLeast(s.startTime)
-            val from = maxOf(s.startTime, windowStart)
-            val to = minOf(end, windowEnd)
-            val millis = to - from
+            val millis = overlapMillis(s, windowStart, windowEnd, now)
             if (millis <= 0L) continue
 
             val previous = buckets[s.taskId]
@@ -42,6 +38,20 @@ object StatsCalculator {
         }
         return buckets.values.sortedByDescending { it.millis }
     }
+
+    /**
+     * How many intervals contributed anything to the window.
+     *
+     * The average session length needs this, and counting *tasks* instead would
+     * be wrong: one task can be tracked a dozen times in a day, and dividing its
+     * total by one would report a twelve-hour "average session".
+     */
+    fun contributingIntervals(
+        sessions: List<SessionWithTask>,
+        windowStart: Long,
+        windowEnd: Long,
+        now: Long,
+    ): Int = sessions.count { overlapMillis(it, windowStart, windowEnd, now) > 0L }
 
     /**
      * Lays two periods' per-task totals side by side.
@@ -80,5 +90,24 @@ object StatsCalculator {
             compareByDescending<ComparisonRow> { it.currentMillis }
                 .thenByDescending { it.previousMillis },
         )
+    }
+
+    /**
+     * The part of [session] that falls inside the window, or zero if it does not
+     * reach it.
+     *
+     * Guards against a clock that moved backwards, so the answer is never
+     * negative and a corrupt row cannot subtract from the total.
+     */
+    private fun overlapMillis(
+        session: SessionWithTask,
+        windowStart: Long,
+        windowEnd: Long,
+        now: Long,
+    ): Long {
+        val end = (session.endTime ?: now).coerceAtLeast(session.startTime)
+        val from = maxOf(session.startTime, windowStart)
+        val to = minOf(end, windowEnd)
+        return (to - from).coerceAtLeast(0L)
     }
 }
