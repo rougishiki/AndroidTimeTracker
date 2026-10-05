@@ -91,6 +91,10 @@ fun StatsScreen(vm: AppViewModel) {
                         secondary = "${current.slices.size} 项任务" +
                             averageSuffix(current.totalMillis, current.intervalCount),
                     )
+                    DonutSection(
+                        totalMillis = current.totalMillis,
+                        slices = current.slices,
+                    )
                     BarSection(
                         slices = current.slices,
                         total = current.totalMillis,
@@ -222,6 +226,41 @@ private fun averageSuffix(totalMillis: Long, intervalCount: Int): String {
     return " · 平均每次 ${Fmt.duration(totalMillis / intervalCount)}"
 }
 
+/**
+ * Share of the day, at a glance.
+ *
+ * The ring is paired with the bar list below rather than replaced by it, because
+ * the two answer different questions: the ring says *how the day split up*, the
+ * bars say *how much exactly, and which task*. Removing the ring as "redundant"
+ * was wrong — the bars were doing double duty as its legend, and a legend is not
+ * a substitute for the thing it labels.
+ */
+@Composable
+private fun DonutSection(totalMillis: Long, slices: List<TaskSlice>) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        DonutChart(
+            slices = slices,
+            modifier = Modifier.size(190.dp),
+        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = Fmt.duration(totalMillis),
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Text(
+                text = "总计",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
 @Composable
 private fun BarSection(
     slices: List<TaskSlice>,
@@ -323,16 +362,12 @@ private fun ComparisonTotalBlock(comparison: PeriodComparison, mode: StatsMode) 
             maxLines = 1,
         )
         Spacer(Modifier.height(Space.xs))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "上一期 ${Fmt.duration(comparison.previousTotalMillis)}",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            DeltaLabel(comparison.deltaMillis)
-        }
-        Spacer(Modifier.height(Space.xs))
+        Text(
+            text = "上期 ${Fmt.duration(comparison.previousTotalMillis)} · " +
+                deltaText(comparison.deltaMillis),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(
             text = "${Fmt.monthDay(comparison.currentStart)} – ${Fmt.monthDay(comparison.currentEndInclusive)}" +
                 " · 对比 ${Fmt.monthDay(comparison.previousStart)} – ${Fmt.monthDay(comparison.previousEndInclusive)}",
@@ -387,34 +422,25 @@ private fun ComparisonRowItem(row: ComparisonRow) {
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "上一期 ${Fmt.duration(row.previousMillis)}",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            DeltaLabel(row.deltaMillis)
-        }
+        Spacer(Modifier.height(Space.xs))
+        Text(
+            text = "上期 ${Fmt.duration(row.previousMillis)} · ${deltaText(row.deltaMillis)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
 /**
- * Deliberately not colour-coded. Whether more time on a task is good or bad
- * depends entirely on the task, and an app that paints every increase red is
- * guessing at something it cannot know.
+ * `↑ 12分` / `↓ 12分` / `持平`.
+ *
+ * Deliberately neither colour-coded nor emphasised. Whether more time on a task
+ * is good or bad depends entirely on the task, and a comparison is context, not a
+ * verdict. The previous version set these in full-contrast ink and right-aligned
+ * them, which turned a footnote into the loudest thing on the page.
  */
-@Composable
-private fun DeltaLabel(deltaMillis: Long) {
-    val text = when {
-        deltaMillis > 0L -> "↑ ${Fmt.duration(deltaMillis)}"
-        deltaMillis < 0L -> "↓ ${Fmt.duration(-deltaMillis)}"
-        else -> "持平"
-    }
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
+private fun deltaText(deltaMillis: Long): String = when {
+    deltaMillis > 0L -> "↑ ${Fmt.duration(deltaMillis)}"
+    deltaMillis < 0L -> "↓ ${Fmt.duration(-deltaMillis)}"
+    else -> "持平"
 }
