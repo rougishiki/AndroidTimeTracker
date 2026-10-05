@@ -15,6 +15,7 @@
 - 开始新任务时会**自动结束上一个**，不会出现两段计时重叠
 - **补记一段**：忘了计时的事后补上，可以改日期，**不会影响正在跑的计时**
 - **管理任务**：重命名、归档、恢复。重命名为已有名字会把两个任务**合并**（历史记录都保留）
+- **忘停提醒**：一段连续计时超过 8 小时后，卡片会问"还在做这件事吗"，可以「结束到现在」或「改成更早」
 
 **待办页**
 - 两个清单：**今天**和**本周**，顶部一键切换
@@ -27,7 +28,9 @@
 - 日历与周列表上带红点的，表示那天 / 那周**还有未完成的待办**
 
 **统计页**
-- 默认显示今天，可左右切换到任意历史日期
+- **可切换 日 / 周 / 月**三种粒度，默认今天
+- **周和月与「上一期」并排对比**：每个任务显示本期、上期和增减，所以它回答的是"我这周比上周好点了吗"
+- 可左右切换到任意历史期，但**不会翻到未来**（未来没有记录）
 - 当日总时长 + 任务项数
 - **环形饼图**：各任务时长占比
 - **条形图**：每项任务的时长、百分比，按耗时从多到少排列
@@ -41,9 +44,11 @@
 - 保存位置由系统文件选择器决定，**应用不申请任何存储权限**
 
 **其它**
-- 通知栏常驻显示正在计时的任务和已用时长
+- 通知栏常驻显示正在计时的任务和已用时长，**并带一个「停止计时」按钮**（一步停止）
+- **长按桌面图标**可以直接开始最近用过的任务（把"解锁→找图标→打开→输入→开始"5 步压到 2 步）
 - 支持深色模式
 - 适配 Android 8.0 ~ 15（minSdk 26 / targetSdk 34）
+- **零后台唤醒**：没有闹钟、没有定时轮询，通知靠系统 chronometer 走秒
 
 ---
 
@@ -53,7 +58,7 @@
 
 ```powershell
 cd TimeTrack
-.\build.ps1                      # release 正式版（约 1.24 MB）
+.\build.ps1                      # release 正式版（约 1.33 MB）
 .\build.ps1 -Variant debug       # debug 版（约 9.4 MB，不混淆，排查问题用）
 ```
 
@@ -65,8 +70,8 @@ cd TimeTrack
 产物：
 
 ```
-TimeTrack\app\build\outputs\apk\release\app-release.apk    1.24 MB
-TimeTrack\app\build\outputs\apk\debug\app-debug.apk        9.42 MB
+TimeTrack\app\build\outputs\apk\release\app-release.apk    1.33 MB
+TimeTrack\app\build\outputs\apk\debug\app-debug.apk        9.45 MB
 ```
 
 > **两个版本的包名不同**（release 是 `com.timetrack.app`，debug 是 `com.timetrack.app.debug`），
@@ -93,7 +98,7 @@ $env:GRADLE_USER_HOME= '..\.toolchain\gradle-home'
 
 ## 测试
 
-`app/src/test/` 下有 **58 个纯 JVM 单元测试**，覆盖最容易出错的日期、统计与导出规则：
+`app/src/test/` 下有 **72 个纯 JVM 单元测试**，覆盖最容易出错的日期、统计与导出规则：
 
 ```powershell
 cd TimeTrack
@@ -109,10 +114,11 @@ cd TimeTrack
 | 测试类 | 用例 | 覆盖内容 |
 |---|---|---|
 | `TodoPeriodTest` | 16 | 周期键、ISO 周年边界、周历网格 |
-| `SessionTimesTest` | 11 | 跨午夜规则、夏令时 23 / 25 小时日 |
-| `MigrationsSchemaTest` | 3 | 手写迁移与 Room 生成的 schema 是否一致 |
-| `StatsCalculatorTest` | 9 | 跨天切分、进行中区间、时钟回拨、窗口裁剪、合并排序 |
+| `StatsCalculatorTest` | 15 | 跨天切分、进行中区间、时钟回拨、窗口裁剪、合并排序、两期对比 |
+| `SessionTimesTest` | 12 | 跨午夜规则、夏令时 23 / 25 小时日、忘停边界 |
 | `ExporterTest` | 19 | CSV 的 BOM 与转义、小数点的语言无关性、JSON 的 null 与待办段 |
+| `StatsPeriodTest` | 7 | 日/周/月窗口相邻不重叠、跨月步进不漂移、与待办周期规则一致 |
+| `MigrationsSchemaTest` | 3 | 手写迁移与 Room 生成的 schema 是否一致 |
 
 四个专门钉死的坑：
 
@@ -121,7 +127,7 @@ cd TimeTrack
   同时出现在两个"周"里。测试逐日校验 2020–2030 每天都能从键回环到该周周一（0 失败）。
 - **夏令时日不是 24 小时。** 如果按"当天零点 + N 分钟"算，柏林 2026-03-29 的
   `01:30 → 03:30` 会算成 2 小时（实际 1 小时），那天只有 23 小时。实现改成把每个时刻按
-  时区解析；基准值是用 JDK 实测出来的（`_probe/DstCheck.java`），不靠推理。无夏令时的
+  时区解析；基准值是用 JDK 实测出来的（`tools/DstCheck.java`），不靠推理。无夏令时的
   时区（如上海）全年 0 处差异，所以这个修复不改变国内用户看到的任何结果。
 - **迁移必须与 schema 逐字符一致。** `MigrationsSchemaTest` 读 `app/schemas/` 里 Room
   导出的 JSON 比对迁移语句。改了实体却忘了改迁移，这个测试会红——否则用户升级后
@@ -158,21 +164,27 @@ TimeTrack/
 ├── build.ps1                     一键构建脚本
 ├── local.properties              SDK 路径（含中文，用 Unicode 转义）
 ├── gradle/libs.versions.toml     依赖版本集中管理
+├── tools/                        推导测试基准值用的 JDK 单文件探针，不参与构建
+│   ├── DstCheck.java             夏令时日的真实时长（区分"按区解析"与"零点加分钟"）
+│   └── WeekCheck.java            ISO 周年边界，以及天真写法错在哪
 ├── app/schemas/                  Room 导出的每版 schema（★ 迁移的对照物，必须提交）
 └── app/src/main/
     ├── AndroidManifest.xml
     ├── res/                      主题、图标、字符串
     └── java/com/timetrack/app/
         ├── TimeTrackApp.kt       Application，持有两个仓库单例
-        ├── MainActivity.kt       唯一 Activity，运行时申请通知权限
+        ├── MainActivity.kt       唯一 Activity：通知权限、快捷方式 intent、刷新快捷方式
+        ├── StartRequest.kt       快捷方式请求的进程内交接点
+        ├── Shortcuts.kt          长按图标的动态快捷方式
         ├── data/
         │   ├── Task.kt           任务定义（软删除，统计不丢历史）
         │   ├── Session.kt        每段计时（endTime=null 表示进行中）
-        │   ├── Models.kt         统计 / 导出 / 待办聚合用的数据模型
+        │   ├── Models.kt         统计 / 导出 / 待办 / 两期对比用的数据模型
         │   ├── TimeTrackDao.kt   Room 查询
         │   ├── TimeTrackDatabase.kt     v2，注册迁移与类型转换器
         │   ├── Migrations.kt     ★ 手写 1→2 迁移，语句与 schema 逐字符对齐
-        │   ├── StatsCalculator.kt       ★ 纯函数聚合，可单元测试
+        │   ├── StatsCalculator.kt       ★ 纯函数聚合与两期对比，可单元测试
+        │   ├── StatsPeriod.kt    ★ 日/周/月窗口边界，纯函数，可单元测试
         │   ├── TimeTrackRepository.kt   ★ 计时域的全部业务规则
         │   ├── SessionTimes.kt   ★ 时间编辑：跨午夜与夏令时规则，纯函数
         │   ├── Todo.kt           待办表（日／周共用一张表）
@@ -180,14 +192,16 @@ TimeTrack/
         │   ├── TodoPeriod.kt     ★ 周期键与日期运算，纯函数，可单元测试
         │   ├── TodoRepository.kt ★ 待办域的全部业务规则
         │   └── Converters.kt     enum 按名字存库，避免序号漂移
-        ├── service/TimerService.kt     前台服务，只负责通知
+        ├── service/
+        │   ├── TimerService.kt        前台服务，只负责通知（含「停止计时」按钮）
+        │   └── StopTimerReceiver.kt   通知按钮的接收者
         ├── ui/
         │   ├── AppViewModel.kt      计时 / 统计 / 导出状态
         │   ├── TodoViewModel.kt     待办状态（两个页面共用，锚在一个 dayKey 上）
-        │   ├── AppRoot.kt           底部导航框架（4 个 tab）
-        │   ├── TimerScreen.kt       计时页（补记一段、管理任务入口）
+        │   ├── AppRoot.kt           底部导航框架（4 个 tab）、对话框与提醒的统一宿主
+        │   ├── TimerScreen.kt       计时页（补记、管理任务、忘停卡片）
         │   ├── TodoScreen.kt        待办页（日 / 周、月历、周列表）
-        │   ├── StatsScreen.kt       统计页（点任务可改时间段）
+        │   ├── StatsScreen.kt       统计页（日/周/月，周月为两期对比）
         │   ├── ExportScreen.kt      导出页
         │   ├── Dialogs.kt           共用的时间编辑 / 任务管理对话框
         │   ├── Charts.kt            自绘环形图
@@ -264,6 +278,28 @@ Room 会在升级后第一次打开数据库时按 `2.json` 重新校验，**任
 `SessionTimesTest` 里那条 `stored millis read back as the times that produced them`
 就是钉住"读出来原样存回去必须是空操作"。
 
+**11. 提醒不靠定时器，靠读状态**
+
+"忘停提醒"如果用 `AlarmManager` 的精确闹钟来做，会打破 `TimerService` 那条"零唤醒"的设计，
+而且 Android 12+ 需要用户去系统设置里手动授予 `SCHEDULE_EXACT_ALARM`。所以它是**读状态**
+而不是**定闹钟**：App 在前台时观察正在进行的区间，超过 8 小时就显示卡片。
+
+代价是诚实的：**一天不打开 App 就看不到这个提醒**。但通知栏那条常驻通知本身就是提醒，
+真正看不见的时间窗口很小。
+
+**12. 桌面快捷方式是"发布请求"，不是"直接调用"**
+
+长按图标的快捷方式复用的是同一个 Activity，而且 App 已在前台时只会触发 `onNewIntent`
+（不会创建新的 composition）。所以 Activity 不直接碰仓库——它把 taskId **发布**到
+`StartRequest`，由 Compose 层观察并消费一次。这样 Activity 保持对业务无知，也天然避免了
+重复开始计时。
+
+**13. 统计的三种粒度共用同一套窗口规则**
+
+`StatsPeriod.bounds` 返回的是**半开区间** `[start, untilExclusive)`。这样"上一期"和"本期"
+恰好首尾相接，既不重叠也不留缝——否则跨月的那一天会被算两次或被漏掉。
+`StatsPeriodTest` 用"上期的结束必须等于本期的开始"这一条把三种粒度一起钉住。
+
 ---
 
 ## 数据存在哪
@@ -283,9 +319,11 @@ Room 会在升级后第一次打开数据库时按 `2.json` 重新校验，**任
 
 ## 以后想扩展
 
-- **周 / 月 / 年统计**：`TimeTrackRepository` 里已有按任意日期区间取数的方法（`exportRows` 的思路），加一个聚合维度即可
+- **年统计 / 自定义区间**：`StatsPeriod` 已把窗口规则抽成纯函数，加一种 `StatsMode` 即可；`rangeStat` 接受任意区间
 - **番茄钟**：在 `Session` 上加 `plannedMillis` 字段，`TimerService` 里用 `setChronometerCountDown(true)`
 - **自动备份**：把 `Exporter` 的输出定期写入 SAF 目录
+- **真正的后台忘停提醒**：需要 `WorkManager` 或非精确闹钟，代价是多一次唤醒和一个依赖；
+  现在的前台检查已经覆盖大部分场景
 - **待办的习惯型重复**：现在的模型是"一次性待办"。习惯型（每天／每周自动出现、不用重新输入）
   需要再加一张完成记录表，`Todo` 本身不用动
 - **把周待办拉到某一天做**：`todos` 表已有 `periodKey`，加一条"本期激活"的记录即可，不用改表结构
