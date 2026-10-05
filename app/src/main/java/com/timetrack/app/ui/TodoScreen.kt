@@ -111,7 +111,20 @@ fun TodoScreen(vm: TodoViewModel) {
             .padding(horizontal = Space.pageH, vertical = Space.pageV),
         verticalArrangement = Arrangement.spacedBy(Space.xl),
     ) {
-        ModeSwitch(mode = mode, onSelect = { vm.setMode(it) })
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                ModeSwitch(mode = mode, onSelect = { vm.setMode(it) })
+            }
+            // Beside the mode switch rather than on a row of its own: giving a
+            // single secondary action its own row spends a whole line of the
+            // screen on something rarely pressed.
+            if (!onToday || mode == TodoScope.WEEK) {
+                TextButton(onClick = { vm.goToToday() }) { Text("回到今天") }
+            }
+        }
 
         PeriodNavigator(
             label = if (mode == TodoScope.DAY) {
@@ -123,10 +136,6 @@ fun TodoScreen(vm: TodoViewModel) {
             onNext = { vm.shift(1) },
             onPick = { if (mode == TodoScope.DAY) showDayPicker = true else showWeekPicker = true },
         )
-
-        if (!onToday || mode == TodoScope.WEEK) {
-            TextButton(onClick = { vm.goToToday() }) { Text("回到今天") }
-        }
 
         when (mode) {
             TodoScope.DAY -> {
@@ -404,6 +413,8 @@ private fun TodoListCard(
 
             TodoInput(hint = inputHint, onSubmit = onSubmit)
 
+            // One rule, not two: the header, the input and the items are one
+            // object, and a line above *and* below the input was furniture.
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
             if (items.isEmpty()) {
