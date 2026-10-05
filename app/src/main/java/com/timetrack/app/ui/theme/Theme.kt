@@ -5,38 +5,71 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
 /**
- * Maps the neutral palette onto Material's roles.
+ * Maps the neutral palette onto Material's roles — all of them.
  *
- * The `surfaceContainer*` roles are set explicitly because Material3 components
- * (notably `Card`) default to them rather than to `surface`; leaving them alone
- * would let a tinted container back in through the side door.
+ * Overriding only the obvious roles is a trap. Anything left unset falls back to
+ * Material3's **baseline palette, which is purple**, and those roles are not
+ * obscure: `inverseSurface` paints every snackbar, `secondaryContainer` paints the
+ * selected segment and every selected chip, `surfaceTint` tints every card at
+ * rest. A "neutral" theme that skips them is not neutral, it is grey with purple
+ * patches appearing at random — which reads as broken rather than as designed.
+ *
+ * Two other deliberate choices:
+ * - `surfaceTint` is transparent, so cards are the colour they say they are
+ *   instead of being washed with a tint for having an elevation.
+ * - Every `surfaceContainer*` is plain `surface`, so dialogs and menus float as
+ *   white sheets. Filled grey is reserved for `surfaceVariant`, which means one
+ *   thing in this app: the live timer.
  */
+private val Transparent = Color(0x00000000)
+
 private val LightScheme = lightColorScheme(
     primary = LightInk,
     onPrimary = LightSurface,
     primaryContainer = LightFill,
     onPrimaryContainer = LightInk,
+    inversePrimary = LightInk,
+
     secondary = LightInkSecondary,
     onSecondary = LightSurface,
+    secondaryContainer = LightFill,
+    onSecondaryContainer = LightInk,
+
+    tertiary = LightInk,
+    onTertiary = LightSurface,
+    tertiaryContainer = LightFill,
+    onTertiaryContainer = LightInk,
+
     background = LightBg,
     onBackground = LightInk,
+
     surface = LightSurface,
     onSurface = LightInk,
     surfaceVariant = LightFill,
     onSurfaceVariant = LightInkSecondary,
+    surfaceTint = Transparent,
+    surfaceBright = LightSurface,
+    surfaceDim = LightBg,
     surfaceContainerLowest = LightSurface,
     surfaceContainerLow = LightSurface,
-    surfaceContainer = LightFill,
-    surfaceContainerHigh = LightFill,
+    surfaceContainer = LightSurface,
+    surfaceContainerHigh = LightSurface,
     surfaceContainerHighest = LightFill,
-    outline = LightOutlineStrong,
-    outlineVariant = LightOutline,
+
+    inverseSurface = LightInk,
+    inverseOnSurface = LightSurface,
+
     error = LightDestructive,
     onError = LightSurface,
     errorContainer = LightErrorContainer,
     onErrorContainer = LightOnErrorContainer,
+
+    outline = LightOutlineStrong,
+    outlineVariant = LightOutline,
+    scrim = Color(0xFF000000),
 )
 
 private val DarkScheme = darkColorScheme(
@@ -44,25 +77,45 @@ private val DarkScheme = darkColorScheme(
     onPrimary = DarkBg,
     primaryContainer = DarkFill,
     onPrimaryContainer = DarkInk,
+    inversePrimary = DarkInk,
+
     secondary = DarkInkSecondary,
     onSecondary = DarkBg,
+    secondaryContainer = DarkFill,
+    onSecondaryContainer = DarkInk,
+
+    tertiary = DarkInk,
+    onTertiary = DarkBg,
+    tertiaryContainer = DarkFill,
+    onTertiaryContainer = DarkInk,
+
     background = DarkBg,
     onBackground = DarkInk,
+
     surface = DarkSurface,
     onSurface = DarkInk,
     surfaceVariant = DarkFill,
     onSurfaceVariant = DarkInkSecondary,
+    surfaceTint = Transparent,
+    surfaceBright = DarkFill,
+    surfaceDim = DarkBg,
     surfaceContainerLowest = DarkBg,
     surfaceContainerLow = DarkSurface,
-    surfaceContainer = DarkFill,
-    surfaceContainerHigh = DarkFill,
+    surfaceContainer = DarkSurface,
+    surfaceContainerHigh = DarkSurface,
     surfaceContainerHighest = DarkFill,
-    outline = DarkOutlineStrong,
-    outlineVariant = DarkOutline,
+
+    inverseSurface = DarkInk,
+    inverseOnSurface = DarkBg,
+
     error = DarkDestructive,
     onError = DarkBg,
     errorContainer = DarkErrorContainer,
     onErrorContainer = DarkOnErrorContainer,
+
+    outline = DarkOutlineStrong,
+    outlineVariant = DarkOutline,
+    scrim = Color(0xFF000000),
 )
 
 /**
