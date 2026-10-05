@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +33,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +48,7 @@ import com.timetrack.app.data.DayStat
 import com.timetrack.app.data.PeriodComparison
 import com.timetrack.app.data.StatsMode
 import com.timetrack.app.data.TaskSlice
+import com.timetrack.app.ui.theme.Radius
 import com.timetrack.app.ui.theme.Space
 import com.timetrack.app.util.Fmt
 import java.time.LocalDate
@@ -53,6 +58,8 @@ fun StatsScreen(vm: AppViewModel) {
     val mode by vm.statsMode.collectAsStateWithLifecycle()
     val stat by vm.dayStat.collectAsStateWithLifecycle()
     val comparison by vm.periodComparison.collectAsStateWithLifecycle()
+
+    var sliceDetail by remember { mutableStateOf<TaskSlice?>(null) }
 
     Column(
         modifier = Modifier
@@ -94,6 +101,7 @@ fun StatsScreen(vm: AppViewModel) {
                     DonutSection(
                         totalMillis = current.totalMillis,
                         slices = current.slices,
+                        onSliceClick = { sliceDetail = it },
                     )
                     BarSection(
                         slices = current.slices,
@@ -116,10 +124,51 @@ fun StatsScreen(vm: AppViewModel) {
 
                 else -> {
                     ComparisonTotalBlock(current, mode)
+                    // The ring belongs in every mode, not just the day: it is the
+                    // period's proportions, and "the period" is whatever the header
+                    // says. Only its slices come from a different place.
+                    val periodSlices = current.rows
+                        .filter { it.currentMillis > 0L }
+                        .map {
+                            TaskSlice(
+                                taskId = it.taskId,
+                                name = it.name,
+                                colorArgb = it.colorArgb,
+                                millis = it.currentMillis,
+                            )
+                        }
+                    DonutSection(
+                        totalMillis = current.currentTotalMillis,
+                        slices = periodSlices,
+                        onSliceClick = { sliceDetail = it },
+                    )
                     ComparisonSection(current)
                 }
             }
         }
+    }
+
+    sliceDetail?.let { slice ->
+        val isDay = mode == StatsMode.DAY
+        SliceDetailDialog(
+            slice = slice,
+            totalMillis = if (isDay) {
+                stat?.totalMillis ?: 0L
+            } else {
+                comparison?.currentTotalMillis ?: 0L
+            },
+            previousMillis = if (isDay) {
+                null
+            } else {
+                comparison?.rows?.firstOrNull { it.taskId == slice.taskId }?.previousMillis
+            },
+            onOpenIntervals = if (isDay) {
+                { vm.openTaskSessions(slice) }
+            } else {
+                null
+            },
+            onDismiss = { sliceDetail = null },
+        )
     }
 
     // The interval editor dialog is hosted in AppRoot rather than here, so the
@@ -236,7 +285,11 @@ private fun averageSuffix(totalMillis: Long, intervalCount: Int): String {
  * a substitute for the thing it labels.
  */
 @Composable
-private fun DonutSection(totalMillis: Long, slices: List<TaskSlice>) {
+private fun DonutSection(
+    totalMillis: Long,
+    slices: List<TaskSlice>,
+    onSliceClick: (TaskSlice) -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -246,6 +299,7 @@ private fun DonutSection(totalMillis: Long, slices: List<TaskSlice>) {
         DonutChart(
             slices = slices,
             modifier = Modifier.size(190.dp),
+            onSliceClick = onSliceClick,
         )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
@@ -259,6 +313,69 @@ private fun DonutSection(totalMillis: Long, slices: List<TaskSlice>) {
             )
         }
     }
+}
+
+/**
+ * What one sector actually is.
+ *
+ * The ring answers "how did the period split up" but it cannot name anything, and
+ * a chart you can only look at is a dead end. Tapping a sector opens this: which
+ * task, how long, its share — and, when a single day is on screen, a way through
+ * to the intervals behind the number.
+ */
+@Composable
+private fun SliceDetailDialog(
+    slice: TaskSlice,
+    totalMillis: Long,
+    previousMillis: Long?,
+    onOpenIntervals: (() -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(slice.name) },
+        confirmButton = {
+            if (onOpenIntervals != null) {
+                TextButton(
+                    onClick = {
+                        onOpenIntervals()
+                        onDismiss()
+                    },
+                ) { Text("查看时间段") }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(Color(slice.colorArgb)),
+                    )
+                    Spacer(Modifier.width(Space.md))
+                    Text(
+                        text = Fmt.duration(slice.millis),
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                }
+                Text(
+                    text = "占比 ${percent(slice.millis, totalMillis)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (previousMillis != null) {
+                    Text(
+                        text = "上期 ${Fmt.duration(previousMillis)} · " +
+                            deltaText(slice.millis - previousMillis),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -395,12 +512,17 @@ private fun ComparisonSection(comparison: PeriodComparison) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        comparison.rows.forEach { row -> ComparisonRowItem(row) }
+        comparison.rows.forEach { row ->
+            ComparisonRowItem(row = row, total = comparison.currentTotalMillis)
+        }
     }
 }
 
 @Composable
-private fun ComparisonRowItem(row: ComparisonRow) {
+private fun ComparisonRowItem(row: ComparisonRow, total: Long) {
+    // A proportion bar, the same shape the day view uses: week and month deserve
+    // the same visual answer to "how much was this, relative to everything else".
+    val fraction = if (total <= 0L) 0f else row.currentMillis.toFloat() / total.toFloat()
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -409,7 +531,7 @@ private fun ComparisonRowItem(row: ComparisonRow) {
                     .clip(CircleShape)
                     .background(Color(row.colorArgb)),
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Space.sm))
             Text(
                 text = row.name,
                 modifier = Modifier.weight(1f),
@@ -421,6 +543,25 @@ private fun ComparisonRowItem(row: ComparisonRow) {
                 text = Fmt.duration(row.currentMillis),
                 style = MaterialTheme.typography.bodyMedium,
             )
+        }
+        Spacer(Modifier.height(Space.xs))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(Radius.bar))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            if (fraction > 0f) {
+                Box(
+                    modifier = Modifier
+                        // Keep very small slices visible instead of collapsing to nothing.
+                        .fillMaxWidth(fraction.coerceIn(0.02f, 1f))
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(Radius.bar))
+                        .background(Color(row.colorArgb)),
+                )
+            }
         }
         Spacer(Modifier.height(Space.xs))
         Text(
