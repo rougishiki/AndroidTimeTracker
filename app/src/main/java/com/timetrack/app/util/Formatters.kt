@@ -2,6 +2,7 @@ package com.timetrack.app.util
 
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -74,4 +75,22 @@ object Fmt {
             else -> base
         }
     }
+
+    private val MONTH_DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日")
+
+    /** `周一`..`周日`, indexed by ISO day number so Monday is always first. */
+    fun weekdayShort(date: LocalDate): String = WEEKDAYS[date.dayOfWeek.value - 1]
+
+    /** The single characters used as the calendar's column headers, Monday first. */
+    val WEEKDAY_HEADS: List<String> = listOf("一", "二", "三", "四", "五", "六", "日")
+
+    /** `2026年10月`, for a picker header. */
+    fun monthTitle(month: YearMonth): String = "${month.year}年${month.monthValue}月"
+
+    /** `10月5日`, for cells and week rows. */
+    fun monthDay(date: LocalDate): String = MONTH_DAY.format(date)
+
+    /** `10月5日 – 10月11日`, the label of one ISO week. */
+    fun weekRange(monday: LocalDate): String =
+        "${MONTH_DAY.format(monday)} – ${MONTH_DAY.format(monday.plusDays(6))}"
 }

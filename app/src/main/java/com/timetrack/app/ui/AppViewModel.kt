@@ -10,6 +10,7 @@ import com.timetrack.app.data.ExportRange
 import com.timetrack.app.data.SessionWithTask
 import com.timetrack.app.data.Task
 import com.timetrack.app.data.TimeTrackRepository
+import com.timetrack.app.data.TodoRepository
 import com.timetrack.app.util.Exporter
 import com.timetrack.app.util.Fmt
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -24,14 +25,25 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/** Rendered export body plus the number of intervals it contains. */
-data class ExportPayload(val content: String, val count: Int)
+/** A rendered export body plus what it holds, so the toast can be specific. */
+data class ExportPayload(
+    val content: String,
+    val sessionCount: Int,
+    val todoCount: Int = 0,
+)
 
 /**
  * Holds no Android Context: the notification is driven from [running] by the UI
  * layer, and exporting returns a String that the caller writes to a SAF Uri.
+ *
+ * It takes [todoRepo] as well as [repo] only because the export screen is one
+ * screen that backs up both domains. Every other interaction with todos lives in
+ * [TodoViewModel], which knows nothing about tracking.
  */
-class AppViewModel(private val repo: TimeTrackRepository) : ViewModel() {
+class AppViewModel(
+    private val repo: TimeTrackRepository,
+    private val todoRepo: TodoRepository,
+) : ViewModel() {
 
     /** Re-emits once per second, aligned to the wall-clock second boundary so the
      *  running display never looks like it skipped or repeated a second. */
@@ -125,15 +137,32 @@ class AppViewModel(private val repo: TimeTrackRepository) : ViewModel() {
         _message.value = "正在导出…"
     }
 
+    /**
+     * The CSV holds one row per tracked interval, so it never carries todos.
+     * The JSON is the backup format, and a backup that silently omitted the todo
+     * lists would not be one — so todos are always exported in full, and the
+     * range affects only the tracking records. The export screen says so.
+     */
     suspend fun renderExport(range: ExportRange, asCsv: Boolean): ExportPayload {
         val rows = repo.exportRows(range)
-        val content = if (asCsv) Exporter.csv(rows) else Exporter.json(rows)
-        return ExportPayload(content = content, count = rows.size)
+        if (asCsv) {
+            return ExportPayload(content = Exporter.csv(rows), sessionCount = rows.size)
+        }
+        val todos = todoRepo.getAll()
+        return ExportPayload(
+            content = Exporter.json(rows, todos = todos),
+            sessionCount = rows.size,
+            todoCount = todos.size,
+        )
     }
 
-    fun exportFinished(count: Int) {
+    fun exportFinished(payload: ExportPayload) {
         _exportBusy.value = false
-        _message.value = if (count > 0) "已导出 $count 条记录" else "该范围内暂无记录，已导出空表"
+        _message.value = when {
+            payload.sessionCount == 0 && payload.todoCount == 0 -> "该范围内暂无记录，已导出空表"
+            payload.todoCount > 0 -> "已导出 ${payload.sessionCount} 条计时记录、${payload.todoCount} 条待办"
+            else -> "已导出 ${payload.sessionCount} 条记录"
+        }
     }
 
     fun exportFailed(reason: String) {
@@ -142,8 +171,11 @@ class AppViewModel(private val repo: TimeTrackRepository) : ViewModel() {
     }
 
     companion object {
-        fun factory(repo: TimeTrackRepository): ViewModelProvider.Factory = viewModelFactory {
-            initializer { AppViewModel(repo) }
+        fun factory(
+            repo: TimeTrackRepository,
+            todoRepo: TodoRepository,
+        ): ViewModelProvider.Factory = viewModelFactory {
+            initializer { AppViewModel(repo, todoRepo) }
         }
     }
 }

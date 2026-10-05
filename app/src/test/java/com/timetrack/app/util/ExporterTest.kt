@@ -1,6 +1,8 @@
 package com.timetrack.app.util
 
 import com.timetrack.app.data.ExportRow
+import com.timetrack.app.data.Todo
+import com.timetrack.app.data.TodoScope
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -125,6 +127,66 @@ class ExporterTest {
         val lastClose = json.lastIndexOf("    }\n")
         assertTrue("first entry must be comma separated", firstClose > 0)
         assertTrue("last entry must not be comma separated", lastClose > firstClose)
+    }
+
+    // ---------- JSON todos ----------
+
+    private fun todo(
+        title: String = "写周报",
+        scope: TodoScope = TodoScope.WEEK,
+        periodKey: String = "2026-W41",
+        createdAt: Long = base,
+        doneAt: Long? = null,
+    ) = Todo(
+        id = 1L,
+        title = title,
+        scope = scope,
+        periodKey = periodKey,
+        createdAt = createdAt,
+        doneAt = doneAt,
+    )
+
+    @Test
+    fun `json carries todos and reports the new schema version`() {
+        val json = Exporter.json(
+            rows = listOf(row()),
+            zone = zone,
+            todos = listOf(todo(), todo(title = "跑步", scope = TodoScope.DAY, periodKey = "2026-10-05")),
+        )
+        assertTrue(json.contains("\"schemaVersion\": 2"))
+        assertTrue(json.contains("\"todoCount\": 2"))
+        assertTrue(json.contains("\"todos\": ["))
+        assertTrue(json.contains("\"period\": \"2026-W41\""))
+        assertTrue(json.contains("\"scope\": \"DAY\""))
+    }
+
+    @Test
+    fun `json marks an unticked todo as not done`() {
+        val json = Exporter.json(emptyList(), zone, listOf(todo(doneAt = null)))
+        assertTrue(json.contains("\"done\": false"))
+        assertTrue(json.contains("\"doneTime\": null"))
+        assertTrue(json.contains("\"doneAt\": null"))
+    }
+
+    @Test
+    fun `json records the moment a todo was ticked`() {
+        val done = base + 3_600_000L
+        val json = Exporter.json(emptyList(), zone, listOf(todo(doneAt = done)))
+        assertTrue(json.contains("\"done\": true"))
+        assertTrue(json.contains("\"doneTime\": $done"))
+    }
+
+    @Test
+    fun `json escapes quotes in a todo title`() {
+        val json = Exporter.json(emptyList(), zone, listOf(todo(title = "他说\"你好\"")))
+        assertTrue(json.contains("\"title\": \"他说\\\"你好\\\"\""))
+    }
+
+    @Test
+    fun `json without todos is still well formed`() {
+        val json = Exporter.json(emptyList(), zone)
+        assertTrue(json.contains("\"todoCount\": 0"))
+        assertTrue(json.contains("\"todos\": ["))
     }
 
     // ---------- file name ----------

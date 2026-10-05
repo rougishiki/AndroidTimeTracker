@@ -57,7 +57,7 @@ fun ExportScreen(vm: AppViewModel) {
                         ?: error("无法写入所选文件")
                     stream.use { it.write(payload.content.toByteArray(Charsets.UTF_8)) }
                 }
-                vm.exportFinished(payload.count)
+                vm.exportFinished(payload)
             } catch (t: Throwable) {
                 vm.exportFailed(t.message ?: "未知错误")
             }
@@ -145,7 +145,7 @@ fun ExportScreen(vm: AppViewModel) {
                     Text("导出 JSON")
                 }
                 Text(
-                    text = "结构化完整备份，保留原始时间戳，适合自己写脚本进一步分析。",
+                    text = "结构化完整备份：计时记录按所选范围导出，待办列表始终全量导出（含完成时间），适合自己写脚本进一步分析。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

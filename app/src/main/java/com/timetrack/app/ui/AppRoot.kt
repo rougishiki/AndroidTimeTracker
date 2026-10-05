@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
@@ -31,6 +32,7 @@ import com.timetrack.app.service.TimerService
 
 private enum class Tab(val label: String, val icon: ImageVector) {
     TIMER("计时", Icons.Filled.PlayArrow),
+    TODO("待办", Icons.Filled.CheckCircle),
     STATS("统计", Icons.Filled.DateRange),
     EXPORT("导出", Icons.Filled.Share),
 }
@@ -39,13 +41,19 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 fun AppRoot() {
     val context = LocalContext.current
     val app = context.applicationContext as TimeTrackApp
-    val vm: AppViewModel = viewModel(factory = AppViewModel.factory(app.repository))
+    val vm: AppViewModel = viewModel(
+        factory = AppViewModel.factory(app.repository, app.todoRepository),
+    )
+    val todoVm: TodoViewModel = viewModel(
+        factory = TodoViewModel.factory(app.todoRepository),
+    )
 
     var tab by rememberSaveable { mutableStateOf(Tab.TIMER) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val running by vm.running.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val todoMessage by todoVm.message.collectAsStateWithLifecycle()
 
     // Notification is a pure projection of observed state, which keeps the
     // ViewModel free of any Context dependency.
@@ -62,6 +70,14 @@ fun AppRoot() {
         val text = message ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(text)
         vm.consumeMessage()
+    }
+
+    // Both view models share one host so a todo action and a timer action can
+    // never stack two snackbars on top of each other.
+    LaunchedEffect(todoMessage) {
+        val text = todoMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(text)
+        todoVm.consumeMessage()
     }
 
     Scaffold(
@@ -86,6 +102,7 @@ fun AppRoot() {
         ) {
             when (tab) {
                 Tab.TIMER -> TimerScreen(vm)
+                Tab.TODO -> TodoScreen(todoVm)
                 Tab.STATS -> StatsScreen(vm)
                 Tab.EXPORT -> ExportScreen(vm)
             }

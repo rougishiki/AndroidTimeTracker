@@ -1,6 +1,7 @@
 package com.timetrack.app.util
 
 import com.timetrack.app.data.ExportRow
+import com.timetrack.app.data.Todo
 import java.time.ZoneId
 
 /**
@@ -26,14 +27,27 @@ object Exporter {
         }
     }
 
-    fun json(rows: List<ExportRow>, zone: ZoneId = ZoneId.systemDefault()): String = buildString {
+    /**
+     * The structured backup, and the only format that carries todos: the CSV is
+     * one row per tracked interval, and mixing a second kind of record into it
+     * would break the column layout.
+     *
+     * [todos] is last and defaulted so existing callers, including the export
+     * tests, keep working unchanged.
+     */
+    fun json(
+        rows: List<ExportRow>,
+        zone: ZoneId = ZoneId.systemDefault(),
+        todos: List<Todo> = emptyList(),
+    ): String = buildString {
         append("{\n")
         append("  \"app\": \"TimeTrack\",\n")
-        append("  \"schemaVersion\": 1,\n")
+        append("  \"schemaVersion\": 2,\n")
         append("  \"timezone\": ").append(quote(zone.id)).append(",\n")
         append("  \"exportedAt\": ").append(quote(Fmt.dateTime(System.currentTimeMillis(), zone))).append(",\n")
         append("  \"sessionCount\": ").append(rows.size).append(",\n")
         append("  \"totalMillis\": ").append(rows.sumOf { it.durationMillis }).append(",\n")
+        append("  \"todoCount\": ").append(todos.size).append(",\n")
         append("  \"sessions\": [\n")
         rows.forEachIndexed { index, r ->
             append("    {\n")
@@ -45,6 +59,20 @@ object Exporter {
             append("      \"durationMillis\": ").append(r.durationMillis).append(",\n")
             append("      \"running\": ").append(r.running).append('\n')
             append("    }").append(if (index == rows.lastIndex) "\n" else ",\n")
+        }
+        append("  ],\n")
+        append("  \"todos\": [\n")
+        todos.forEachIndexed { index, t ->
+            append("    {\n")
+            append("      \"title\": ").append(quote(t.title)).append(",\n")
+            append("      \"scope\": ").append(quote(t.scope.name)).append(",\n")
+            append("      \"period\": ").append(quote(t.periodKey)).append(",\n")
+            append("      \"createdTime\": ").append(t.createdAt).append(",\n")
+            append("      \"createdAt\": ").append(quote(Fmt.dateTime(t.createdAt, zone))).append(",\n")
+            append("      \"done\": ").append(t.doneAt != null).append(",\n")
+            append("      \"doneTime\": ").append(t.doneAt?.toString() ?: "null").append(",\n")
+            append("      \"doneAt\": ").append(t.doneAt?.let { quote(Fmt.dateTime(it, zone)) } ?: "null").append('\n')
+            append("    }").append(if (index == todos.lastIndex) "\n" else ",\n")
         }
         append("  ]\n")
         append("}\n")
