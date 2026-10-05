@@ -15,8 +15,8 @@ android {
         applicationId = "com.timetrack.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -70,6 +70,14 @@ kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
     }
+}
+
+ksp {
+    // Room writes the schema of each database version to app/schemas. That JSON
+    // is committed, so a migration can be diffed against the schema Room
+    // actually expects instead of being hand-written and hoped for. Without it
+    // neither @AutoMigration nor migration tests are possible.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
